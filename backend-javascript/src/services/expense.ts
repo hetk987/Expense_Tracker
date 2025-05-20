@@ -1,5 +1,6 @@
-import { Expense, Prisma } from "@prisma/client";
+import { CategoryType, Expense, Prisma } from "@prisma/client";
 import prisma from "../prismaClient";
+import CategoryService from "./category";
 
 export const create = async (input: {
     merchant: string;
@@ -7,9 +8,13 @@ export const create = async (input: {
     comments?: string;
     date?: string;
     currency?: string;
-    categoryId: string;
+    category: CategoryType;
     tagNames?: string[];
 }) => {
+    const category = await CategoryService.getByTitle(input.category);
+    if (!category) {
+        throw new Error(`Category not found: ${input.category}`);
+    }
     return prisma.expense.create({
         data: {
             merchant: input.merchant,
@@ -17,7 +22,7 @@ export const create = async (input: {
             comments: input.comments,
             date: input.date ? new Date(input.date) : undefined,
             currency: input.currency,
-            category: { connect: { id: input.categoryId } },
+            category: { connect: { id: category.id } },
             tags: input.tagNames
                 ? { connect: input.tagNames.map(name => ({ name })) }
                 : undefined,

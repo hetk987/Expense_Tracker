@@ -1,7 +1,8 @@
 
 import { Request, Response, NextFunction } from 'express';
-import { Expense, Prisma } from '@prisma/client';
+import { CategoryType, Expense, Prisma } from '@prisma/client';
 import * as expenseService from '../services/expense';
+import CategoryService from '../services/category';
 
 interface CreateExpenseDTO {
     merchant: string;
@@ -9,7 +10,7 @@ interface CreateExpenseDTO {
     comments?: string;
     date?: string;
     currency?: string;
-    categoryId: string;
+    category: CategoryType;
     tagNames?: string[];
 }
 
@@ -20,7 +21,6 @@ export const createExpense = async (
     next: NextFunction
 ) => {
     try {
-        console.log('req.body =', req.body);
         const data = req.body as CreateExpenseDTO;
         const newExpense: Expense = await expenseService.create(data)
         res.json(newExpense)
