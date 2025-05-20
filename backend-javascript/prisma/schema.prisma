@@ -1,0 +1,68 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Expense {
+  // Primary key
+  id String @id @default(uuid())
+
+  // Timestamps
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+  date      DateTime  @default(now())
+
+  // Core data
+  merchant String
+  amount   Decimal @db.Decimal(12, 2)
+  currency String  @default("USD")
+  comments String?
+
+  // Relations
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+  tags       Tag[]
+
+  @@unique([date, merchant, amount])
+  @@index([categoryId])
+  @@index([deletedAt])
+  @@index([date])
+}
+
+model Category {
+  id       String       @id @default(uuid())
+  title    CategoryType @unique
+  expenses Expense[]
+}
+
+model Tag {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  createdAt DateTime  @default(now())
+  expenses  Expense[]
+}
+
+enum CategoryType {
+  HOUSING_UTILITIES
+  FOOD_DINING
+  SHOPPING
+  TRAVEL
+  ENTERTAINMENT
+  HEALTH
+  TRANSPORTATION
+  EDUCATION_SUPPLIES
+  PERSONAL_LIFESTYLE
+  INCOME
+  MISCELLANEOUS
+}

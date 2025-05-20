@@ -5,19 +5,28 @@
   "license": "ISC",
   "author": "",
   "type": "commonjs",
-  "main": "server.js",
+  "main": "app.js",
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "nodemon --watch src --ext js,json --exec node src/server.js"
+    "build": "tsc",
+    "start": "npm run build && node dist/app.js",
+    "dev": "nodemon --watch src --ext ts,json --exec tsx src/app.ts"
   },
   "dependencies": {
+    "@prisma/client": "^6.8.2",
     "express": "^5.1.0"
   },
   "devDependencies": {
     "@types/express": "^5.0.2",
-    "@types/node": "^22.15.18",
+    "@types/node": "^22.15.19",
     "nodemon": "^3.1.10",
+    "prisma": "^6.8.2",
+    "ts-node": "^10.9.2",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma",
+    "seed": "ts-node prisma/seed.ts"
+
   }
 }
