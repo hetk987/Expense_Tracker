@@ -1,8 +1,12 @@
 import express from "express";
-import { createExpense } from "../controllers/expense";
+import { createExpense, getExpense } from "../controllers/expense";
 
 const router = express.Router()
 
-router.post("/", createExpense)
+router.route("/")
+    .get(getExpense)
+    .post(createExpense)
+    .delete(deleteExpense)
+
 
 export default router
