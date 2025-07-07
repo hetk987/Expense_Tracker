@@ -13,56 +13,60 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model Expense {
-  // Primary key
-  id String @id @default(uuid())
-
-  // Timestamps
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deletedAt DateTime?
-  date      DateTime  @default(now())
-
-  // Core data
-  merchant String
-  amount   Decimal @db.Decimal(12, 2)
-  currency String  @default("USD")
-  comments String?
+model PlaidAccount {
+  id            String   @id @default(uuid())
+  plaidAccountId String  @unique
+  name          String
+  mask          String?
+  type          String
+  subtype       String?
+  institutionId String
+  linkTokenId   String
+  accessToken   String   // Plaid access token
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   // Relations
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
-  tags       Tag[]
+  transactions PlaidTransaction[]
+  linkToken    PlaidLinkToken @relation(fields: [linkTokenId], references: [id])
 
-  @@unique([date, merchant, amount])
-  @@index([categoryId])
-  @@index([deletedAt])
+  @@index([plaidAccountId])
+  @@index([institutionId])
+}
+
+model PlaidTransaction {
+  id              String   @id @default(uuid())
+  plaidTransactionId String @unique
+  accountId       String
+  amount          Decimal  @db.Decimal(12, 2)
+  currency        String   @default("USD")
+  date            DateTime
+  name            String
+  merchantName    String?
+  category        String[]
+  pending         Boolean  @default(false)
+  paymentChannel  String?
+  transactionType String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  account PlaidAccount @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
   @@index([date])
+  @@index([pending])
 }
 
-model Category {
-  id       String       @id @default(uuid())
-  title    CategoryType @unique
-  expenses Expense[]
-}
+model PlaidLinkToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 
-model Tag {
-  id        String    @id @default(uuid())
-  name      String    @unique
-  createdAt DateTime  @default(now())
-  expenses  Expense[]
-}
+  // Relations
+  accounts PlaidAccount[]
 
-enum CategoryType {
-  HOUSING_UTILITIES
-  FOOD_DINING
-  SHOPPING
-  TRAVEL
-  ENTERTAINMENT
-  HEALTH
-  TRANSPORTATION
-  EDUCATION_SUPPLIES
-  PERSONAL_LIFESTYLE
-  INCOME
-  MISCELLANEOUS
+  @@index([token])
+  @@index([expiresAt])
 }
