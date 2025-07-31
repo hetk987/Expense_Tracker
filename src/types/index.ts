@@ -44,6 +44,14 @@ export interface ExchangeTokenResponse {
         name: string;
         type: string;
         subtype: string;
+        mask?: string;
+    }[];
+    duplicateAccounts?: {
+        id: string;
+        name: string;
+        type: string;
+        subtype: string;
+        mask?: string;
     }[];
 }
 

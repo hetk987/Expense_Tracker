@@ -37,20 +37,13 @@ A modern, responsive web application for tracking expenses with automatic bank i
    npm install
    ```
 
-2. **Environment Variables**:
-   Create a `.env.local` file in the root directory:
-
-   ```env
-   NEXT_PUBLIC_API_URL=http://localhost:3000
-   ```
-
-3. **Start the development server**:
+2. **Start the development server**:
 
    ```bash
    npm run dev
    ```
 
-4. **Open your browser**:
+3. **Open your browser**:
    Navigate to [http://localhost:3001](http://localhost:3001)
 
 ## Project Structure
@@ -62,19 +55,40 @@ src/
 │   ├── layout.tsx         # Root layout
 │   ├── page.tsx           # Dashboard page
 │   ├── link-account/      # Account linking page
-│   └── transactions/      # Transactions page
+│   ├── transactions/      # Transactions page
+│   ├── sign-in/           # Sign-in page
+│   └── sign-up/           # Sign-up page
 ├── components/            # Reusable UI components
 │   ├── ui/               # Base UI components
 │   │   ├── button.tsx
 │   │   ├── card.tsx
 │   │   └── badge.tsx
-│   └── Header.tsx        # Main navigation header
+│   ├── Header.tsx        # Main navigation header
+│   └── AuthWrapper.tsx   # Authentication wrapper component
 ├── lib/                  # Utility functions and services
 │   ├── api.ts           # API service layer
 │   └── utils.ts         # Helper functions
 └── types/               # TypeScript type definitions
     └── index.ts
 ```
+
+## Authentication
+
+This application uses **Clerk** for user authentication and management. The integration follows the latest Next.js App Router patterns:
+
+### Features
+
+- **Secure Authentication**: User sign-in and sign-up with Clerk
+- **Protected Routes**: All main pages require authentication
+- **User Management**: Built-in user profile and account management
+- **Modal Authentication**: Seamless sign-in/sign-up experience
+
+### Authentication Flow
+
+1. Users can sign up or sign in using the buttons in the header
+2. All protected pages are wrapped with `AuthWrapper` component
+3. Unauthenticated users see a welcome message and sign-in options
+4. Authenticated users have access to the full expense tracking features
 
 ## Key Components
 
@@ -84,6 +98,7 @@ src/
 - Recent transactions preview
 - Linked accounts summary
 - Quick actions for syncing and linking accounts
+- **Protected**: Requires authentication
 
 ### Link Account (`/link-account`)
 
@@ -91,6 +106,7 @@ src/
 - Step-by-step account connection process
 - Security information and supported banks
 - Success confirmation with linked account details
+- **Protected**: Requires authentication
 
 ### Transactions (`/transactions`)
 
@@ -99,6 +115,7 @@ src/
 - Pagination support
 - Transaction categorization and status indicators
 - Export and analysis features
+- **Protected**: Requires authentication
 
 ## API Integration
 

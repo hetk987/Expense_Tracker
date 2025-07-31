@@ -57,7 +57,7 @@ export class PlaidService {
     /**
      * Exchanges a public token (from Plaid Link) for an access token
      */
-    static async exchangePublicToken(publicToken: string): Promise<{ access_token: string; accounts: any[] }> {
+    static async exchangePublicToken(publicToken: string): Promise<{ access_token: string; accounts: any[]; duplicateAccounts?: any[] }> {
         try {
             const response = await plaidClient.itemPublicTokenExchange({
                 public_token: publicToken,
@@ -78,7 +78,48 @@ export class PlaidService {
                 access_token: accessToken,
             });
 
-            // Create or get the link token record
+            // Check for duplicate accounts before creating new ones
+            const duplicateAccounts = [];
+            const newAccounts = [];
+
+            for (const account of accountsResponse.data.accounts) {
+                const existingAccount = await prisma.plaidAccount.findUnique({
+                    where: {
+                        plaidAccountId: account.account_id,
+                    },
+                });
+
+                if (existingAccount) {
+                    console.log(`Duplicate account found: ${account.name} (${account.account_id})`);
+                    duplicateAccounts.push(existingAccount);
+                } else {
+                    console.log(`New account found: ${account.name} (${account.account_id})`);
+                    newAccounts.push(account);
+                }
+            }
+
+            console.log(`Total accounts: ${accountsResponse.data.accounts.length}, New: ${newAccounts.length}, Duplicates: ${duplicateAccounts.length}`);
+
+            // If all accounts are duplicates, return early with duplicate info
+            if (duplicateAccounts.length > 0 && newAccounts.length === 0) {
+                console.log('All accounts are duplicates, skipping database operations');
+                return {
+                    access_token: accessToken,
+                    accounts: [],
+                    duplicateAccounts: duplicateAccounts,
+                };
+            }
+
+            // If there are no accounts at all, return empty response
+            if (accountsResponse.data.accounts.length === 0) {
+                console.log('No accounts found, skipping database operations');
+                return {
+                    access_token: accessToken,
+                    accounts: [],
+                };
+            }
+
+            // Only create link token if we have new accounts to save
             const linkToken = await prisma.plaidLinkToken.create({
                 data: {
                     token: `link_${Date.now()}`, // Generate a unique token
@@ -86,9 +127,10 @@ export class PlaidService {
                 },
             });
 
-            // Store accounts in database
-            const accounts = await Promise.all(
-                accountsResponse.data.accounts.map(async (account) => {
+            // Store only new accounts in database (duplicates are excluded)
+            console.log(`Creating ${newAccounts.length} new account records in database`);
+            const createdAccounts = await Promise.all(
+                newAccounts.map(async (account) => {
                     return await prisma.plaidAccount.create({
                         data: {
                             plaidAccountId: account.account_id,
@@ -104,9 +146,22 @@ export class PlaidService {
                 })
             );
 
+            console.log(`Successfully processed: ${createdAccounts.length} new accounts, ${duplicateAccounts.length} duplicates skipped`);
+
+            // If we found duplicates during creation, update the response
+            if (duplicateAccounts.length > 0 && createdAccounts.length === 0) {
+                console.log('All accounts were duplicates, returning duplicate info');
+                return {
+                    access_token: accessToken,
+                    accounts: [],
+                    duplicateAccounts: duplicateAccounts,
+                };
+            }
+
             return {
                 access_token: accessToken,
-                accounts: accounts,
+                accounts: createdAccounts,
+                duplicateAccounts: duplicateAccounts.length > 0 ? duplicateAccounts : undefined,
             };
         } catch (error) {
             console.error('Error exchanging public token:', error);

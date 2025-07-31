@@ -5,6 +5,13 @@ import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CreditCard, BarChart3, Plus, Sun, Moon } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
+import {
+  SignInButton,
+  SignUpButton,
+  SignedIn,
+  SignedOut,
+  UserButton,
+} from "@clerk/nextjs";
 
 export default function Header() {
   const pathname = usePathname();
@@ -33,29 +40,31 @@ export default function Header() {
           </div>
 
           {/* Navigation */}
-          <nav className="hidden md:flex items-center space-x-8">
-            {navigation.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
+          <SignedIn>
+            <nav className="hidden md:flex items-center space-x-8">
+              {navigation.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
 
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    isActive
-                      ? "bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-200"
-                      : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span>{item.name}</span>
-                </Link>
-              );
-            })}
-          </nav>
+                return (
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-primary-100 dark:bg-primary-900 text-primary-700 dark:text-primary-200"
+                        : "text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span>{item.name}</span>
+                  </Link>
+                );
+              })}
+            </nav>
+          </SignedIn>
 
-          {/* Theme Toggle and Mobile Menu */}
+          {/* Theme Toggle, Auth, and Mobile Menu */}
           <div className="flex items-center gap-4">
             {/* Theme Toggle */}
             <Button
@@ -70,6 +79,23 @@ export default function Header() {
                 <Sun className="h-5 w-5" />
               )}
             </Button>
+
+            {/* Authentication */}
+            <SignedOut>
+              <div className="flex items-center gap-2">
+                <SignInButton mode="modal">
+                  <Button variant="ghost" size="sm">
+                    Sign In
+                  </Button>
+                </SignInButton>
+                <SignUpButton mode="modal">
+                  <Button size="sm">Sign Up</Button>
+                </SignUpButton>
+              </div>
+            </SignedOut>
+            <SignedIn>
+              <UserButton />
+            </SignedIn>
 
             {/* Mobile menu button */}
             <div className="md:hidden">

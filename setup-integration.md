@@ -17,22 +17,12 @@ npm install
 
 ## Step 2: Environment Variables
 
-Create a `.env.local` file in the frontend directory with the following variables:
-
-```env
-# Database
-DATABASE_URL="postgresql://username:password@localhost:5432/expense_tracker"
-
-# Plaid Configuration
-PLAID_CLIENT_ID="your_plaid_client_id"
-PLAID_SECRET="your_plaid_secret"
-PLAID_ENV="sandbox" # or "development" or "production"
-PLAID_WEBHOOK_URL="https://your-domain.com/api/plaid/webhook"
-
 # Next.js
+
 NEXTAUTH_SECRET="your_nextauth_secret"
 NEXTAUTH_URL="http://localhost:3000"
-```
+
+````
 
 ## Step 3: Database Setup
 
@@ -42,7 +32,7 @@ NEXTAUTH_URL="http://localhost:3000"
 ```bash
 npx prisma migrate dev
 npx prisma generate
-```
+````
 
 ## Step 4: Update Webhook URL
 
