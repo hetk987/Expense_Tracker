@@ -28,7 +28,13 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { plaidApi } from "@/lib/api";
-import { PlaidTransaction, PlaidAccount, TransactionFilters, CategoryData, CategoryStats } from "@/types";
+import {
+  PlaidTransaction,
+  PlaidAccount,
+  TransactionFilters,
+  CategoryData,
+  CategoryStats,
+} from "@/types";
 import {
   formatCurrency,
   formatDate,
@@ -67,7 +73,9 @@ export default function TransactionsPage() {
     limit: 50,
     offset: 0,
   });
-  const [availableCategories, setAvailableCategories] = useState<CategoryStats[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<
+    CategoryStats[]
+  >([]);
   const [transactionStats, setTransactionStats] = useState<{
     totalCount: number;
     totalSpending: number;
@@ -131,12 +139,13 @@ export default function TransactionsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [transactionsData, accountsData, statsData, categoryData] = await Promise.all([
-        plaidApi.getTransactions(filters),
-        plaidApi.getAccounts(),
-        plaidApi.getTransactionStats(filters),
-        plaidApi.getCategories(),
-      ]);
+      const [transactionsData, accountsData, statsData, categoryData] =
+        await Promise.all([
+          plaidApi.getTransactions(filters),
+          plaidApi.getAccounts(),
+          plaidApi.getTransactionStats(filters),
+          plaidApi.getCategories(),
+        ]);
       console.log("transactionsData");
       console.log(transactionsData);
       setTransactions(transactionsData.transactions);
@@ -358,22 +367,34 @@ export default function TransactionsPage() {
                 </div>
               </div>
               {chartView === "pie" ? (
-                <CategoryPieChart 
-                  data={availableCategories.map(cat => ({
+                <CategoryPieChart
+                  data={availableCategories.map((cat) => ({
                     ...cat,
                     amount: cat.totalAmount,
-                    percentage: cat.totalAmount / availableCategories.reduce((sum, c) => sum + c.totalAmount, 0) * 100
-                  }))} 
-                  title="" 
+                    percentage:
+                      (cat.totalAmount /
+                        availableCategories.reduce(
+                          (sum, c) => sum + c.totalAmount,
+                          0
+                        )) *
+                      100,
+                  }))}
+                  title=""
                 />
               ) : (
-                <CategoryBarChart 
-                  data={availableCategories.map(cat => ({
+                <CategoryBarChart
+                  data={availableCategories.map((cat) => ({
                     ...cat,
                     amount: cat.totalAmount,
-                    percentage: cat.totalAmount / availableCategories.reduce((sum, c) => sum + c.totalAmount, 0) * 100
+                    percentage:
+                      (cat.totalAmount /
+                        availableCategories.reduce(
+                          (sum, c) => sum + c.totalAmount,
+                          0
+                        )) *
+                      100,
                   }))}
-                  title="" 
+                  title=""
                 />
               )}
             </div>
@@ -440,7 +461,10 @@ export default function TransactionsPage() {
                 <SelectContent>
                   <SelectItem value="all">All Categories</SelectItem>
                   {availableCategories.map((categoryStats) => (
-                    <SelectItem key={String(categoryStats.category)} value={categoryStats.category}>
+                    <SelectItem
+                      key={String(categoryStats.category)}
+                      value={categoryStats.category}
+                    >
                       {categoryStats.category}
                     </SelectItem>
                   ))}
@@ -545,8 +569,7 @@ export default function TransactionsPage() {
               Transaction History
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-gray-400">
-              {paginatedTransactions.length} of {pagination.total}{" "}
-              transactions
+              {paginatedTransactions.length} of {pagination.total} transactions
             </CardDescription>
           </CardHeader>
           <CardContent>
