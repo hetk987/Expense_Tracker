@@ -629,20 +629,13 @@ export default function TransactionsPage() {
                             {transaction.merchantName}
                           </p>
                         )}
-                        {transaction.category &&
-                          transaction.category.length > 0 && (
-                            <div className="flex gap-1 mt-1">
-                              {transaction.category.map((cat, index) => (
-                                <Badge
-                                  key={index}
-                                  variant="secondary"
-                                  className="text-xs"
-                                >
-                                  {cat}
-                                </Badge>
-                              ))}
-                            </div>
-                          )}
+                        {transaction.category && (
+                          <div className="flex gap-1 mt-1">
+                            <Badge variant="secondary" className="text-xs">
+                              {transaction.category}
+                            </Badge>
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div className="text-right">
