@@ -347,13 +347,22 @@ export default function Dashboard() {
           {/* Linked Accounts */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Linked Credit Cards
-              </CardTitle>
-              <CardDescription>
-                Your connected credit card accounts
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    Linked Credit Cards
+                  </CardTitle>
+                  <CardDescription>
+                    Your connected credit card accounts
+                  </CardDescription>
+                </div>
+                {accounts.length > 0 && (
+                  <Button variant="outline" size="sm" asChild>
+                    <Link href="/accounts">Manage Accounts</Link>
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {accounts.length === 0 ? (

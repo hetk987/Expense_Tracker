@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { CreditCard, BarChart3, Plus, Sun, Moon } from "lucide-react";
+import { CreditCard, BarChart3, Plus, Sun, Moon, Settings } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
   SignInButton,
@@ -21,6 +21,7 @@ export default function Header() {
     { name: "Dashboard", href: "/", icon: BarChart3 },
     { name: "Transactions", href: "/transactions", icon: CreditCard },
     { name: "Link Card", href: "/link-account", icon: Plus },
+    { name: "Accounts", href: "/accounts", icon: Settings },
   ];
 
   return (

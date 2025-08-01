@@ -58,6 +58,30 @@ export const plaidApi = {
         const response = await api.post<{ message: string }>('/api/plaid/sync');
         return response.data;
     },
+
+    // Unlink a single account
+    unlinkAccount: async (accountId: string): Promise<{
+        success: boolean;
+        message: string;
+        deletedTransactions: number;
+        accountName: string;
+    }> => {
+        const response = await api.delete(`/api/plaid/accounts/unlink?accountId=${accountId}`);
+        return response.data;
+    },
+
+    // Unlink multiple accounts
+    unlinkAccounts: async (accountIds: string[]): Promise<{
+        success: boolean;
+        results: any[];
+        errors: any[];
+        totalProcessed: number;
+        successful: number;
+        failed: number;
+    }> => {
+        const response = await api.delete(`/api/plaid/accounts/unlink?accountIds=${accountIds.join(',')}`);
+        return response.data;
+    },
 };
 
 export default api;

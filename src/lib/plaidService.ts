@@ -356,4 +356,126 @@ export class PlaidService {
             throw error;
         }
     }
+
+    /**
+     * Unlinks an account and deletes all associated transactional data
+     */
+    static async unlinkAccount(accountId: string) {
+        try {
+            console.log(`Starting unlink process for account: ${accountId}`);
+
+            // Validate account ID format
+            if (!accountId || typeof accountId !== 'string' || accountId.trim() === '') {
+                throw new Error('Invalid account ID provided');
+            }
+
+            // First, verify the account exists
+            const account = await prisma.plaidAccount.findUnique({
+                where: { id: accountId },
+                include: {
+                    transactions: true,
+                },
+            });
+
+            if (!account) {
+                throw new Error('Account not found');
+            }
+
+            console.log(`Found account: ${account.name} with ${account.transactions.length} transactions`);
+
+            // Use a transaction to ensure data consistency
+            const result = await prisma.$transaction(async (tx) => {
+                // Delete all transactions associated with this account
+                const deleteTransactionsResult = await tx.plaidTransaction.deleteMany({
+                    where: { accountId: accountId },
+                });
+
+                console.log(`Deleted ${deleteTransactionsResult.count} transactions for account ${account.name}`);
+
+                // Delete the account itself
+                const deletedAccount = await tx.plaidAccount.delete({
+                    where: { id: accountId },
+                });
+
+                console.log(`Successfully unlinked account: ${deletedAccount.name}`);
+
+                // Check if this was the last account for this link token
+                const remainingAccounts = await tx.plaidAccount.findMany({
+                    where: { linkTokenId: account.linkTokenId },
+                });
+
+                // If no accounts remain for this link token, clean up the link token
+                if (remainingAccounts.length === 0) {
+                    await tx.plaidLinkToken.delete({
+                        where: { id: account.linkTokenId },
+                    });
+                    console.log(`Cleaned up orphaned link token: ${account.linkTokenId}`);
+                }
+
+                return {
+                    success: true,
+                    message: `Successfully unlinked account: ${deletedAccount.name}`,
+                    deletedTransactions: deleteTransactionsResult.count,
+                    accountName: deletedAccount.name,
+                };
+            });
+
+            return result;
+        } catch (error) {
+            console.error('Error unlinking account:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Unlinks multiple accounts by their IDs
+     */
+    static async unlinkAccounts(accountIds: string[]) {
+        try {
+            console.log(`Starting bulk unlink process for ${accountIds.length} accounts`);
+
+            // Validate input
+            if (!Array.isArray(accountIds) || accountIds.length === 0) {
+                throw new Error('Invalid account IDs array provided');
+            }
+
+            // Filter out invalid account IDs
+            const validAccountIds = accountIds.filter(id =>
+                id && typeof id === 'string' && id.trim() !== ''
+            );
+
+            if (validAccountIds.length === 0) {
+                throw new Error('No valid account IDs provided');
+            }
+
+            if (validAccountIds.length !== accountIds.length) {
+                console.warn(`Filtered out ${accountIds.length - validAccountIds.length} invalid account IDs`);
+            }
+
+            const results = [];
+            const errors = [];
+
+            for (const accountId of validAccountIds) {
+                try {
+                    const result = await this.unlinkAccount(accountId);
+                    results.push(result);
+                } catch (error) {
+                    console.error(`Failed to unlink account ${accountId}:`, error);
+                    errors.push({ accountId, error: error instanceof Error ? error.message : 'Unknown error' });
+                }
+            }
+
+            return {
+                success: errors.length === 0,
+                results,
+                errors,
+                totalProcessed: validAccountIds.length,
+                successful: results.length,
+                failed: errors.length,
+            };
+        } catch (error) {
+            console.error('Error in bulk unlink process:', error);
+            throw error;
+        }
+    }
 } 
