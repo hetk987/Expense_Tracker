@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prismaClient';
+import { debugProtected, logDebugAccess } from '@/lib/debugAuth';
 
-export async function POST(request: NextRequest) {
+async function testConstraintHandler(request: NextRequest) {
     try {
+        // Log debug access
+        logDebugAccess(request, '/api/debug/test-constraint');
+
         const body = await request.json();
         const { plaidAccountId, name, mask, type, subtype, institutionId } = body;
 
@@ -24,6 +28,10 @@ export async function POST(request: NextRequest) {
             success: true,
             message: 'Account created successfully (constraint might not be working)',
             account: result,
+            debug: {
+                environment: process.env.NODE_ENV,
+                timestamp: new Date().toISOString(),
+            },
         });
     } catch (error: any) {
         if (error.code === 'P2002') {
@@ -31,6 +39,10 @@ export async function POST(request: NextRequest) {
                 success: false,
                 message: 'Unique constraint working correctly - duplicate prevented',
                 error: error.message,
+                debug: {
+                    environment: process.env.NODE_ENV,
+                    timestamp: new Date().toISOString(),
+                },
             }, { status: 409 });
         }
 
@@ -38,6 +50,12 @@ export async function POST(request: NextRequest) {
             success: false,
             message: 'Other error occurred',
             error: error.message,
+            debug: {
+                environment: process.env.NODE_ENV,
+                timestamp: new Date().toISOString(),
+            },
         }, { status: 500 });
     }
-} 
+}
+
+export const POST = debugProtected(testConstraintHandler); 

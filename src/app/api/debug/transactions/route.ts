@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prismaClient';
+import { debugProtected, logDebugAccess } from '@/lib/debugAuth';
 
-export async function GET(request: NextRequest) {
+async function getTransactionsHandler(request: NextRequest) {
     try {
+        // Log debug access
+        logDebugAccess(request, '/api/debug/transactions');
+
         const { searchParams } = new URL(request.url);
         const limit = parseInt(searchParams.get('limit') || '50');
         const offset = parseInt(searchParams.get('offset') || '0');
@@ -129,6 +133,17 @@ export async function GET(request: NextRequest) {
                 updatedAt: transaction.updatedAt,
                 account: transaction.account,
             })),
+            debug: {
+                environment: process.env.NODE_ENV,
+                timestamp: new Date().toISOString(),
+                queryParams: {
+                    limit,
+                    offset,
+                    accountId,
+                    startDate,
+                    endDate,
+                },
+            },
         });
     } catch (error) {
         console.error('Error fetching transactions:', error);
@@ -137,4 +152,6 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         );
     }
-} 
+}
+
+export const GET = debugProtected(getTransactionsHandler); 

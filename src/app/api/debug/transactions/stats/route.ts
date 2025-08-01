@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prismaClient';
+import { debugProtected, logDebugAccess } from '@/lib/debugAuth';
 
-export async function GET(request: NextRequest) {
+async function getTransactionStatsHandler(request: NextRequest) {
     try {
+        // Log debug access
+        logDebugAccess(request, '/api/debug/transactions/stats');
+
         // Get overall statistics
         const overallStats = await prisma.plaidTransaction.aggregate({
             _count: {
@@ -156,6 +160,10 @@ export async function GET(request: NextRequest) {
                 accountName: t.account?.name,
                 accountMask: t.account?.mask,
             })),
+            debug: {
+                environment: process.env.NODE_ENV,
+                timestamp: new Date().toISOString(),
+            },
         });
     } catch (error) {
         console.error('Error fetching transaction stats:', error);
@@ -164,4 +172,6 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         );
     }
-} 
+}
+
+export const GET = debugProtected(getTransactionStatsHandler); 

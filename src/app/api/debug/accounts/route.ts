@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prismaClient';
+import { debugProtected, logDebugAccess } from '@/lib/debugAuth';
 
-export async function GET(request: NextRequest) {
+async function getAccountsHandler(request: NextRequest) {
     try {
+        // Log debug access
+        logDebugAccess(request, '/api/debug/accounts');
+
         const accounts = await prisma.plaidAccount.findMany({
             orderBy: {
                 createdAt: 'desc',
@@ -23,6 +27,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({
             total: accounts.length,
             accounts: accounts,
+            debug: {
+                environment: process.env.NODE_ENV,
+                timestamp: new Date().toISOString(),
+            },
         });
     } catch (error) {
         console.error('Error fetching accounts:', error);
@@ -31,4 +39,6 @@ export async function GET(request: NextRequest) {
             { status: 500 }
         );
     }
-} 
+}
+
+export const GET = debugProtected(getAccountsHandler); 
