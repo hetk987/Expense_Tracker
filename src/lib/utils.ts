@@ -46,6 +46,17 @@ export function getCurrentMonthRange() {
     };
 }
 
+export function getCurrentYearRange() {
+    const now = new Date();
+    const startOfYear = new Date(now.getFullYear(), 0, 1); // January 1st of current year
+    const endOfYear = new Date(now.getFullYear(), 11, 31); // December 31st of current year
+
+    return {
+        startDate: startOfYear.toISOString().split('T')[0],
+        endDate: endOfYear.toISOString().split('T')[0],
+    };
+}
+
 export function getLast30DaysRange() {
     const now = new Date();
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);

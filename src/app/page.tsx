@@ -28,7 +28,12 @@ import {
 } from "lucide-react";
 import { plaidApi } from "@/lib/api";
 import { PlaidAccount, PlaidTransaction } from "@/types";
-import { formatCurrency, formatDate, getCurrentMonthRange } from "@/lib/utils";
+import {
+  formatCurrency,
+  formatDate,
+  getCurrentMonthRange,
+  getCurrentYearRange,
+} from "@/lib/utils";
 import {
   processCategoryData,
   processTimeSeriesData,
@@ -66,7 +71,7 @@ export default function Dashboard() {
           plaidApi.getTransactions({ limit: 10 }),
           plaidApi.getTransactions({
             limit: 1000,
-            ...getCurrentMonthRange(),
+            ...getCurrentYearRange(),
           }),
         ]);
       setAccounts(accountsData);
@@ -95,8 +100,8 @@ export default function Dashboard() {
   const categoryData = processCategoryData(allTransactions);
   const timeSeriesData = processTimeSeriesData(
     allTransactions,
-    getCurrentMonthRange().startDate,
-    getCurrentMonthRange().endDate
+    getCurrentYearRange().startDate,
+    getCurrentYearRange().endDate
   );
   const topCategories = getTopSpendingCategories(allTransactions, 5);
 

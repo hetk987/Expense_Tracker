@@ -33,6 +33,7 @@ import {
   formatCurrency,
   formatDate,
   getCurrentMonthRange,
+  getCurrentYearRange,
   getLast30DaysRange,
 } from "@/lib/utils";
 import {
@@ -59,6 +60,7 @@ export default function TransactionsPage() {
   const [filters, setFilters] = useState<TransactionFilters>({
     limit: 50,
     offset: 0,
+    ...getCurrentYearRange(),
   });
   const [pagination, setPagination] = useState({
     total: 0,
@@ -120,7 +122,7 @@ export default function TransactionsPage() {
 
       // Get all transactions for category analysis (without pagination)
       const allTransactionsData = await plaidApi.getTransactions({
-        ...getCurrentMonthRange(),
+        ...getCurrentYearRange(),
         limit: 1000,
         offset: 0,
       });
@@ -228,8 +230,8 @@ export default function TransactionsPage() {
   const categoryData = processCategoryData(filteredTransactions);
   const timeSeriesData = processTimeSeriesData(
     filteredTransactions,
-    filters.startDate || getCurrentMonthRange().startDate,
-    filters.endDate || getCurrentMonthRange().endDate
+    filters.startDate || getCurrentYearRange().startDate,
+    filters.endDate || getCurrentYearRange().endDate
   );
 
   const categories = [
@@ -528,6 +530,17 @@ export default function TransactionsPage() {
 
             {/* Quick Date Filters */}
             <div className="flex gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const range = getCurrentYearRange();
+                  handleFilterChange("startDate", range.startDate);
+                  handleFilterChange("endDate", range.endDate);
+                }}
+              >
+                This Year
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

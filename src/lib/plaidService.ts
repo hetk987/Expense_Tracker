@@ -1,5 +1,6 @@
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import { prisma } from './prismaClient';
+import { getCurrentYearRange } from './utils';
 
 const configuration = new Configuration({
     basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments || 'sandbox'],
@@ -280,7 +281,7 @@ export class PlaidService {
 
             const startDate = lastTransaction
                 ? lastTransaction.date.toISOString().split('T')[0]
-                : new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]; // Start of current year
+                : getCurrentYearRange().startDate; // Use start of current year for new accounts
 
             const endDate = new Date().toISOString().split('T')[0];
 
