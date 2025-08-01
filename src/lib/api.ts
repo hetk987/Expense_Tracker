@@ -6,6 +6,8 @@ import {
     PlaidAccount,
     TransactionsResponse,
     TransactionFilters,
+    CategoryData,
+    CategoryStats,
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || '';
@@ -50,8 +52,18 @@ export const plaidApi = {
         if (filters.category) params.append('category', filters.category);
 
         const response = await api.get<TransactionsResponse>(`/api/plaid/transactions?${params.toString()}`);
-        console.log('response.data');
-        console.log(response.data);
+        return response.data;
+    },
+
+    // Get all categories
+    getCategories: async (filters?: { accountId?: string; startDate?: string; endDate?: string }): Promise<CategoryStats[]> => {
+        const params = new URLSearchParams();
+        
+        if (filters?.accountId) params.append('accountId', filters.accountId);
+        if (filters?.startDate) params.append('startDate', filters.startDate);
+        if (filters?.endDate) params.append('endDate', filters.endDate);
+        
+        const response = await api.get<CategoryStats[]>(`/api/plaid/categories?${params.toString()}`);
         return response.data;
     },
 

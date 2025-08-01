@@ -45,6 +45,7 @@ model PlaidTransaction {
   name            String
   merchantName    String?
   category        String
+  categoryIcon    String?
   pending         Boolean  @default(false)
   paymentChannel  String?
   transactionType String?

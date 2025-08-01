@@ -20,7 +20,8 @@ export interface PlaidTransaction {
     date: string;
     name: string;
     merchantName?: string;
-    category: string[];
+    category: string;
+    categoryIcon?: string;
     pending: boolean;
     paymentChannel?: string;
     transactionType?: string;
@@ -92,4 +93,11 @@ export interface ChartData {
         borderColor?: string;
         borderWidth?: number;
     }[];
+}
+
+export interface CategoryStats {
+    category: string;
+    count: number;
+    totalAmount: number;
+    averageAmount: number;
 } 

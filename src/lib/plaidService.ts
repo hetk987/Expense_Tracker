@@ -245,6 +245,59 @@ export class PlaidService {
     }
 
     /**
+     * Gets all unique categories from transactions with optional filtering
+     */
+    static async getCategories(filters: { accountId?: string; startDate?: string; endDate?: string } = {}) {
+        try {
+            const whereClause: any = {};
+
+            // Add account filter if specified
+            if (filters.accountId) {
+                whereClause.accountId = filters.accountId;
+            }
+
+            // Add date range filters if specified
+            if (filters.startDate || filters.endDate) {
+                whereClause.date = {};
+                if (filters.startDate) {
+                    whereClause.date.gte = new Date(filters.startDate);
+                }
+                if (filters.endDate) {
+                    whereClause.date.lte = new Date(filters.endDate);
+                }
+            }
+
+            // Get all unique categories with their transaction counts and total amounts
+            const categoryStats = await prisma.plaidTransaction.groupBy({
+                by: ['category'],
+                where: whereClause,
+                _count: {
+                    id: true, // Count of transactions
+                },
+                _sum: {
+                    amount: true, // Sum of amounts
+                },
+            });
+
+            // Transform the results into the expected format
+            const categories = categoryStats.map(stat => ({
+                category: stat.category,
+                count: stat._count.id,
+                totalAmount: Math.abs(Number(stat._sum.amount || 0)),
+                averageAmount: Math.abs(Number(stat._sum.amount || 0) / stat._count.id),
+            }));
+
+            // Sort by total amount descending
+            categories.sort((a, b) => b.totalAmount - a.totalAmount);
+
+            return categories;
+        } catch (error) {
+            console.error('Error getting categories:', error);
+            throw error;
+        }
+    }
+
+    /**
      * Syncs transactions for all active accounts
      */
     static async syncTransactions() {
@@ -308,9 +361,10 @@ export class PlaidService {
                         name: transaction.name,
                         merchantName: transaction.merchant_name,
                         category: transaction.personal_finance_category?.primary || "Uncategorized",
+                        categoryIcon: transaction.personal_finance_category_icon_url || "",
                         pending: transaction.pending,
                         paymentChannel: transaction.payment_channel,
-                        transactionType: transaction.transaction_type,
+                        transactionType: transaction.payment_channel,
                         updatedAt: new Date(),
                     },
                     create: {
@@ -321,9 +375,10 @@ export class PlaidService {
                         name: transaction.name,
                         merchantName: transaction.merchant_name,
                         category: transaction.personal_finance_category?.primary || "Uncategorized",
+                        categoryIcon: transaction.personal_finance_category_icon_url || "",
                         pending: transaction.pending,
                         paymentChannel: transaction.payment_channel,
-                        transactionType: transaction.transaction_type,
+                        transactionType: transaction.payment_channel,
                     },
                 });
             }

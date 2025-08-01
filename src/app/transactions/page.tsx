@@ -28,7 +28,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { plaidApi } from "@/lib/api";
-import { PlaidTransaction, PlaidAccount, TransactionFilters } from "@/types";
+import { PlaidTransaction, PlaidAccount, TransactionFilters, CategoryData, CategoryStats } from "@/types";
 import {
   formatCurrency,
   formatDate,
@@ -67,7 +67,7 @@ export default function TransactionsPage() {
     limit: 50,
     offset: 0,
   });
-  const [availableCategories, setAvailableCategories] = useState<string[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<CategoryStats[]>([]);
   const [showCharts, setShowCharts] = useState(false);
   const [chartView, setChartView] = useState<"pie" | "bar" | "line">("pie");
   const [searchTerm, setSearchTerm] = useState("");
@@ -112,6 +112,8 @@ export default function TransactionsPage() {
         plaidApi.getTransactions(filters),
         plaidApi.getAccounts(),
       ]);
+      console.log("transactionsData");
+      console.log(transactionsData);
       setTransactions(transactionsData.transactions);
       setPagination({
         total: transactionsData.total,
@@ -121,14 +123,10 @@ export default function TransactionsPage() {
       setAccounts(accountsData);
 
       // Get all transactions for category analysis (without pagination)
-      const allTransactionsData = await plaidApi.getTransactions({
-        ...getCurrentYearRange(),
-        limit: 1000,
-        offset: 0,
-      });
-      setAvailableCategories(
-        getAvailableCategories(allTransactionsData.transactions)
-      );
+      const categoryData = await plaidApi.getCategories();
+      console.log("categoryData");
+      console.log(categoryData);
+      setAvailableCategories(categoryData);
     } catch (error) {
       console.error("Error loading transactions:", error);
     } finally {
@@ -233,13 +231,6 @@ export default function TransactionsPage() {
     filters.startDate || getCurrentYearRange().startDate,
     filters.endDate || getCurrentYearRange().endDate
   );
-
-  const categories = [
-    "all",
-    ...Array.from(
-      new Set(transactions.flatMap((t) => t.category || []).filter(Boolean))
-    ),
-  ];
 
   // Apply pagination to filtered results
   const paginatedTransactions = filteredTransactions.slice(
@@ -410,11 +401,24 @@ export default function TransactionsPage() {
                   </Button>
                 </div>
               </div>
-
               {chartView === "pie" ? (
-                <CategoryPieChart data={categoryData} title="" />
+                <CategoryPieChart 
+                  data={availableCategories.map(cat => ({
+                    ...cat,
+                    amount: cat.totalAmount,
+                    percentage: cat.totalAmount / availableCategories.reduce((sum, c) => sum + c.totalAmount, 0) * 100
+                  }))} 
+                  title="" 
+                />
               ) : (
-                <CategoryBarChart data={categoryData} title="" />
+                <CategoryBarChart 
+                  data={availableCategories.map(cat => ({
+                    ...cat,
+                    amount: cat.totalAmount,
+                    percentage: cat.totalAmount / availableCategories.reduce((sum, c) => sum + c.totalAmount, 0) * 100
+                  }))}
+                  title="" 
+                />
               )}
             </div>
 
@@ -478,9 +482,9 @@ export default function TransactionsPage() {
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={String(category)} value={String(category)}>
-                      {category === "all" ? "All Categories" : String(category)}
+                  {availableCategories.map((categoryStats) => (
+                    <SelectItem key={String(categoryStats.category)} value={categoryStats.category}>
+                      {categoryStats.category === "all" ? "All Categories" : categoryStats.category}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -663,7 +667,7 @@ export default function TransactionsPage() {
             )}
 
             {/* Pagination */}
-            {filteredTransactions.length > itemsPerPage && (
+            {pagination.total > itemsPerPage && (
               <div className="flex items-center justify-between mt-6">
                 <div className="text-sm text-gray-500 dark:text-gray-400">
                   Showing {(calculatedCurrentPage - 1) * itemsPerPage + 1} to{" "}

@@ -80,8 +80,8 @@ export function getAvailableCategories(transactions: PlaidTransaction[]): string
     const categories = new Set<string>()
 
     transactions.forEach(transaction => {
-        if (transaction.category && transaction.category.length > 0) {
-            categories.add(transaction.category[0])
+        if (transaction.category) {
+            categories.add(transaction.category)
         }
     })
 
