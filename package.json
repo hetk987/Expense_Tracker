@@ -17,7 +17,7 @@
     "chart.js": "^4.4.0",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",
-    "lucide-react": "^0.294.0",
+    "lucide-react": "^0.460.0",
     "next": "15.4.5",
     "plaid": "^18.0.0",
     "react": "19.1.1",
@@ -44,6 +44,14 @@
     "seed": "tsx prisma/seed.ts"
   },
   "overrides": {
+    "@types/react": "19.1.9",
+    "@types/react-dom": "19.1.7",
+    "react": "19.1.1",
+    "react-dom": "19.1.1"
+  },
+  "resolutions": {
+    "react": "19.1.1",
+    "react-dom": "19.1.1",
     "@types/react": "19.1.9",
     "@types/react-dom": "19.1.7"
   }
