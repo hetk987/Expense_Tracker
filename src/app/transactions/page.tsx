@@ -81,6 +81,29 @@ export default function TransactionsPage() {
     loadData();
   }, [filters]);
 
+  // Apply filters when search, category, or status changes
+  useEffect(() => {
+    const newFilters: TransactionFilters = {
+      ...filters,
+      offset: 0, // Reset pagination when filters change
+    };
+
+    // Apply category filter
+    if (selectedCategory && selectedCategory !== "all") {
+      newFilters.category = selectedCategory;
+    } else {
+      delete newFilters.category;
+    }
+
+    // Apply search filter (if implemented in API)
+    if (searchTerm.trim()) {
+      // Note: Search would need to be implemented in the API
+      // For now, we'll filter client-side
+    }
+
+    setFilters(newFilters);
+  }, [selectedCategory, selectedStatus, searchTerm]);
+
   const loadData = async () => {
     try {
       setLoading(true);
@@ -98,7 +121,7 @@ export default function TransactionsPage() {
 
       // Get all transactions for category analysis (without pagination)
       const allTransactionsData = await plaidApi.getTransactions({
-        ...filters,
+        ...getCurrentMonthRange(),
         limit: 1000,
         offset: 0,
       });
@@ -146,10 +169,66 @@ export default function TransactionsPage() {
   const calculatedCurrentPage =
     Math.floor(pagination.offset / pagination.limit) + 1;
 
-  const creditCardMetrics = calculateCreditCardMetrics(transactions);
-  const categoryData = processCategoryData(transactions);
+  // Apply client-side filtering for search and status
+  let filteredTransactions = transactions;
+
+  // Apply search filter (client-side)
+  if (searchTerm.trim()) {
+    filteredTransactions = filteredTransactions.filter(
+      (transaction) =>
+        transaction.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (transaction.merchantName &&
+          transaction.merchantName
+            .toLowerCase()
+            .includes(searchTerm.toLowerCase()))
+    );
+  }
+
+  // Apply status filter (client-side)
+  if (selectedStatus !== "all") {
+    filteredTransactions = filteredTransactions.filter((transaction) => {
+      if (selectedStatus === "pending") {
+        return transaction.pending;
+      } else if (selectedStatus === "completed") {
+        return !transaction.pending;
+      }
+      return true;
+    });
+  }
+
+  // Apply sorting (client-side)
+  filteredTransactions.sort((a, b) => {
+    let aValue: any;
+    let bValue: any;
+
+    switch (sortBy) {
+      case "date":
+        aValue = new Date(a.date);
+        bValue = new Date(b.date);
+        break;
+      case "amount":
+        aValue = Math.abs(a.amount);
+        bValue = Math.abs(b.amount);
+        break;
+      case "name":
+        aValue = a.name.toLowerCase();
+        bValue = b.name.toLowerCase();
+        break;
+      default:
+        return 0;
+    }
+
+    if (sortOrder === "asc") {
+      return aValue > bValue ? 1 : -1;
+    } else {
+      return aValue < bValue ? 1 : -1;
+    }
+  });
+
+  const creditCardMetrics = calculateCreditCardMetrics(filteredTransactions);
+  const categoryData = processCategoryData(filteredTransactions);
   const timeSeriesData = processTimeSeriesData(
-    transactions,
+    filteredTransactions,
     filters.startDate || getCurrentMonthRange().startDate,
     filters.endDate || getCurrentMonthRange().endDate
   );
@@ -160,12 +239,14 @@ export default function TransactionsPage() {
       new Set(transactions.flatMap((t) => t.category || []).filter(Boolean))
     ),
   ];
-  const paginatedTransactions = transactions.slice(
+
+  // Apply pagination to filtered results
+  const paginatedTransactions = filteredTransactions.slice(
     (calculatedCurrentPage - 1) * itemsPerPage,
     calculatedCurrentPage * itemsPerPage
   );
 
-  const totalSpending = transactions.reduce(
+  const totalSpending = filteredTransactions.reduce(
     (sum, t) => sum + Math.abs(t.amount),
     0
   );
@@ -229,10 +310,10 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {transactions.length}
+                {filteredTransactions.length}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
-                Showing {transactions.length} of {pagination.total}
+                Showing {filteredTransactions.length} of {pagination.total}
               </p>
             </CardContent>
           </Card>
@@ -264,8 +345,8 @@ export default function TransactionsPage() {
             <CardContent>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
                 {formatCurrency(
-                  transactions.length > 0
-                    ? totalSpending / transactions.length
+                  filteredTransactions.length > 0
+                    ? totalSpending / filteredTransactions.length
                     : 0
                 )}
               </div>
@@ -285,7 +366,7 @@ export default function TransactionsPage() {
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
                 {formatCurrency(
-                  transactions.reduce(
+                  filteredTransactions.reduce(
                     (max, t) => Math.max(max, Math.abs(t.amount)),
                     0
                   )
@@ -357,7 +438,7 @@ export default function TransactionsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -368,6 +449,24 @@ export default function TransactionsPage() {
                   className="pl-10"
                 />
               </div>
+
+              {/* Start Date */}
+              <Input
+                type="date"
+                placeholder="Start Date"
+                value={filters.startDate || ""}
+                onChange={(e) =>
+                  handleFilterChange("startDate", e.target.value)
+                }
+              />
+
+              {/* End Date */}
+              <Input
+                type="date"
+                placeholder="End Date"
+                value={filters.endDate || ""}
+                onChange={(e) => handleFilterChange("endDate", e.target.value)}
+              />
 
               {/* Category Filter */}
               <Select
@@ -427,6 +526,42 @@ export default function TransactionsPage() {
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Quick Date Filters */}
+            <div className="flex gap-2 mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const range = getCurrentMonthRange();
+                  handleFilterChange("startDate", range.startDate);
+                  handleFilterChange("endDate", range.endDate);
+                }}
+              >
+                This Month
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const range = getLast30DaysRange();
+                  handleFilterChange("startDate", range.startDate);
+                  handleFilterChange("endDate", range.endDate);
+                }}
+              >
+                Last 30 Days
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  handleFilterChange("startDate", "");
+                  handleFilterChange("endDate", "");
+                }}
+              >
+                Clear Dates
+              </Button>
+            </div>
           </CardContent>
         </Card>
 
@@ -437,7 +572,7 @@ export default function TransactionsPage() {
               Transaction History
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-gray-400">
-              {paginatedTransactions.length} of {transactions.length}{" "}
+              {paginatedTransactions.length} of {filteredTransactions.length}{" "}
               transactions
             </CardDescription>
           </CardHeader>
@@ -482,6 +617,20 @@ export default function TransactionsPage() {
                             {transaction.merchantName}
                           </p>
                         )}
+                        {transaction.category &&
+                          transaction.category.length > 0 && (
+                            <div className="flex gap-1 mt-1">
+                              {transaction.category.map((cat, index) => (
+                                <Badge
+                                  key={index}
+                                  variant="secondary"
+                                  className="text-xs"
+                                >
+                                  {cat}
+                                </Badge>
+                              ))}
+                            </div>
+                          )}
                       </div>
                     </div>
                     <div className="text-right">
@@ -501,12 +650,6 @@ export default function TransactionsPage() {
                             Pending
                           </Badge>
                         )}
-                        {transaction.category &&
-                          transaction.category.length > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {transaction.category[0]}
-                            </Badge>
-                          )}
                       </div>
                     </div>
                   </div>
@@ -515,17 +658,17 @@ export default function TransactionsPage() {
             )}
 
             {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-8">
-                <div className="text-sm text-gray-600">
-                  Showing {pagination.offset + 1} to{" "}
+            {filteredTransactions.length > itemsPerPage && (
+              <div className="flex items-center justify-between mt-6">
+                <div className="text-sm text-gray-500 dark:text-gray-400">
+                  Showing {(calculatedCurrentPage - 1) * itemsPerPage + 1} to{" "}
                   {Math.min(
-                    pagination.offset + pagination.limit,
-                    pagination.total
+                    calculatedCurrentPage * itemsPerPage,
+                    filteredTransactions.length
                   )}{" "}
-                  of {pagination.total} transactions
+                  of {filteredTransactions.length} transactions
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex gap-2">
                   <Button
                     variant="outline"
                     size="sm"
@@ -534,21 +677,20 @@ export default function TransactionsPage() {
                         Math.max(0, pagination.offset - pagination.limit)
                       )
                     }
-                    disabled={currentPage === 1}
+                    disabled={pagination.offset === 0}
                   >
                     <ChevronLeft className="h-4 w-4" />
                     Previous
                   </Button>
-                  <span className="text-sm text-gray-600">
-                    Page {currentPage} of {totalPages}
-                  </span>
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() =>
                       handlePageChange(pagination.offset + pagination.limit)
                     }
-                    disabled={currentPage === totalPages}
+                    disabled={
+                      pagination.offset + pagination.limit >= pagination.total
+                    }
                   >
                     Next
                     <ChevronRight className="h-4 w-4" />
