@@ -88,29 +88,33 @@ export default function AccountManager({
       setError(null);
       setSuccess(null);
 
-      let result;
       if (unlinkModal.isBulkUnlink) {
         const accountIds = accounts.map((account) => account.id);
-        result = await plaidApi.unlinkAccounts(accountIds);
-      } else {
-        result = await plaidApi.unlinkAccount(unlinkModal.accountId);
-      }
+        const result = await plaidApi.unlinkAccounts(accountIds);
 
-      if (result.success) {
-        if (unlinkModal.isBulkUnlink) {
+        if (result.success) {
           setSuccess(
             `Successfully unlinked ${result.successful} accounts. Deleted transactions from all accounts.`
           );
         } else {
+          setError(
+            `Failed to unlink some accounts. ${result.failed} accounts failed to unlink.`
+          );
+        }
+      } else {
+        const result = await plaidApi.unlinkAccount(unlinkModal.accountId);
+
+        if (result.success) {
           setSuccess(
             `Successfully unlinked ${result.accountName}. Deleted ${result.deletedTransactions} transactions.`
           );
+        } else {
+          setError("Failed to unlink account");
         }
-        await fetchAccounts(); // Refresh the accounts list
-        onAccountsChange?.(); // Notify parent component
-      } else {
-        setError("Failed to unlink account");
       }
+
+      await fetchAccounts(); // Refresh the accounts list
+      onAccountsChange?.(); // Notify parent component
     } catch (err) {
       console.error("Error unlinking account:", err);
       setError("Failed to unlink account. Please try again.");
