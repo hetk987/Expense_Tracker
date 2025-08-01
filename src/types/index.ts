@@ -69,6 +69,10 @@ export interface TransactionFilters {
     limit?: number;
     offset?: number;
     category?: string;
+    search?: string;
+    status?: string;
+    sortBy?: "date" | "amount" | "name";
+    sortOrder?: "asc" | "desc";
 }
 
 export interface CategoryData {

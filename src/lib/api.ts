@@ -50,6 +50,10 @@ export const plaidApi = {
         if (filters.limit) params.append('limit', filters.limit.toString());
         if (filters.offset) params.append('offset', filters.offset.toString());
         if (filters.category) params.append('category', filters.category);
+        if (filters.search) params.append('search', filters.search);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.sortBy) params.append('sortBy', filters.sortBy);
+        if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
 
         const response = await api.get<TransactionsResponse>(`/api/plaid/transactions?${params.toString()}`);
         return response.data;
@@ -58,12 +62,32 @@ export const plaidApi = {
     // Get all categories
     getCategories: async (filters?: { accountId?: string; startDate?: string; endDate?: string }): Promise<CategoryStats[]> => {
         const params = new URLSearchParams();
-        
+
         if (filters?.accountId) params.append('accountId', filters.accountId);
         if (filters?.startDate) params.append('startDate', filters.startDate);
         if (filters?.endDate) params.append('endDate', filters.endDate);
-        
+
         const response = await api.get<CategoryStats[]>(`/api/plaid/categories?${params.toString()}`);
+        return response.data;
+    },
+
+    // Get transaction statistics
+    getTransactionStats: async (filters: TransactionFilters = {}): Promise<{
+        totalCount: number;
+        totalSpending: number;
+        averageAmount: number;
+        largestAmount: number;
+    }> => {
+        const params = new URLSearchParams();
+
+        if (filters.accountId) params.append('accountId', filters.accountId);
+        if (filters.startDate) params.append('startDate', filters.startDate);
+        if (filters.endDate) params.append('endDate', filters.endDate);
+        if (filters.category) params.append('category', filters.category);
+        if (filters.search) params.append('search', filters.search);
+        if (filters.status) params.append('status', filters.status);
+
+        const response = await api.get(`/api/plaid/transactions/stats?${params.toString()}`);
         return response.data;
     },
 

@@ -1,6 +1,7 @@
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import { prisma } from './prismaClient';
 import { getCurrentYearRange } from './utils';
+import { Decimal } from '@prisma/client/runtime/library';
 
 const configuration = new Configuration({
     basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments || 'sandbox'],
@@ -21,6 +22,10 @@ export interface TransactionFilters {
     limit?: number;
     offset?: number;
     category?: string;
+    search?: string;
+    status?: string;
+    sortBy?: "date" | "amount" | "name";
+    sortOrder?: "asc" | "desc";
 }
 
 export class PlaidService {
@@ -213,10 +218,53 @@ export class PlaidService {
                 };
             }
 
-            if (filters.category) {
-                where.category = {
-                    has: filters.category,
-                };
+            if (filters.category && filters.category !== 'all') {
+                where.category = filters.category;
+            }
+
+            if (filters.search) {
+                where.OR = [
+                    {
+                        name: {
+                            contains: filters.search,
+                            mode: 'insensitive',
+                        },
+                    },
+                    {
+                        merchantName: {
+                            contains: filters.search,
+                            mode: 'insensitive',
+                        },
+                    },
+                ];
+            }
+
+            if (filters.status && filters.status !== 'all') {
+                if (filters.status === 'pending') {
+                    where.pending = true;
+                } else if (filters.status === 'completed') {
+                    where.pending = false;
+                }
+            }
+
+            // Determine sort order
+            let orderBy: any = {};
+            if (filters.sortBy) {
+                switch (filters.sortBy) {
+                    case 'date':
+                        orderBy.date = filters.sortOrder || 'desc';
+                        break;
+                    case 'amount':
+                        orderBy.amount = filters.sortOrder || 'desc';
+                        break;
+                    case 'name':
+                        orderBy.name = filters.sortOrder || 'asc';
+                        break;
+                    default:
+                        orderBy.date = 'desc';
+                }
+            } else {
+                orderBy.date = 'desc';
             }
 
             const transactions = await prisma.plaidTransaction.findMany({
@@ -224,9 +272,7 @@ export class PlaidService {
                 include: {
                     account: true,
                 },
-                orderBy: {
-                    date: 'desc',
-                },
+                orderBy,
                 take: filters.limit || 100,
                 skip: filters.offset || 0,
             });
@@ -240,6 +286,101 @@ export class PlaidService {
             };
         } catch (error) {
             console.error('Error getting transactions:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Gets transaction statistics with optional filtering
+     */
+    static async getTransactionStats(filters: TransactionFilters = {}) {
+        try {
+            const where: any = {};
+
+            if (filters.accountId) {
+                where.accountId = filters.accountId;
+            }
+
+            if (filters.startDate) {
+                where.date = {
+                    ...where.date,
+                    gte: new Date(filters.startDate),
+                };
+            }
+
+            if (filters.endDate) {
+                where.date = {
+                    ...where.date,
+                    lte: new Date(filters.endDate),
+                };
+            }
+
+            if (filters.category && filters.category !== 'all') {
+                where.category = filters.category;
+            }
+
+            if (filters.search) {
+                where.OR = [
+                    {
+                        name: {
+                            contains: filters.search,
+                            mode: 'insensitive',
+                        },
+                    },
+                    {
+                        merchantName: {
+                            contains: filters.search,
+                            mode: 'insensitive',
+                        },
+                    },
+                ];
+            }
+
+            if (filters.status && filters.status !== 'all') {
+                if (filters.status === 'pending') {
+                    where.pending = true;
+                } else if (filters.status === 'completed') {
+                    where.pending = false;
+                }
+            }
+
+            // Get total count
+            const totalCount = await prisma.plaidTransaction.count({ where });
+
+            // Get total spending (sum of absolute amounts)
+            const totalSpendingResult = await prisma.plaidTransaction.aggregate({
+                where,
+                _sum: {
+                    amount: true,
+                },
+            });
+
+            const totalSpending = Math.abs(Number((totalSpendingResult._sum.amount as any) || 0));
+
+            // Get average transaction amount
+            const averageAmount = totalCount > 0 ? totalSpending / totalCount : 0;
+
+            // Get largest transaction
+            const largestTransaction = await prisma.plaidTransaction.findFirst({
+                where,
+                orderBy: {
+                    amount: 'desc',
+                },
+                select: {
+                    amount: true,
+                },
+            });
+
+            const largestAmount = largestTransaction ? Math.abs(largestTransaction.amount) : 0;
+
+            return {
+                totalCount,
+                totalSpending,
+                averageAmount,
+                largestAmount,
+            };
+        } catch (error) {
+            console.error('Error getting transaction stats:', error);
             throw error;
         }
     }

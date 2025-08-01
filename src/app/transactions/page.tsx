@@ -68,6 +68,17 @@ export default function TransactionsPage() {
     offset: 0,
   });
   const [availableCategories, setAvailableCategories] = useState<CategoryStats[]>([]);
+  const [transactionStats, setTransactionStats] = useState<{
+    totalCount: number;
+    totalSpending: number;
+    averageAmount: number;
+    largestAmount: number;
+  }>({
+    totalCount: 0,
+    totalSpending: 0,
+    averageAmount: 0,
+    largestAmount: 0,
+  });
   const [showCharts, setShowCharts] = useState(false);
   const [chartView, setChartView] = useState<"pie" | "bar" | "line">("pie");
   const [searchTerm, setSearchTerm] = useState("");
@@ -82,7 +93,7 @@ export default function TransactionsPage() {
     loadData();
   }, [filters]);
 
-  // Apply filters when search, category, or status changes
+  // Apply filters when search, category, status, or sort changes
   useEffect(() => {
     const newFilters: TransactionFilters = {
       ...filters,
@@ -96,21 +107,35 @@ export default function TransactionsPage() {
       delete newFilters.category;
     }
 
-    // Apply search filter (if implemented in API)
+    // Apply search filter
     if (searchTerm.trim()) {
-      // Note: Search would need to be implemented in the API
-      // For now, we'll filter client-side
+      newFilters.search = searchTerm.trim();
+    } else {
+      delete newFilters.search;
     }
 
+    // Apply status filter
+    if (selectedStatus && selectedStatus !== "all") {
+      newFilters.status = selectedStatus;
+    } else {
+      delete newFilters.status;
+    }
+
+    // Apply sort
+    newFilters.sortBy = sortBy;
+    newFilters.sortOrder = sortOrder;
+
     setFilters(newFilters);
-  }, [selectedCategory, selectedStatus, searchTerm]);
+  }, [selectedCategory, selectedStatus, searchTerm, sortBy, sortOrder]);
 
   const loadData = async () => {
     try {
       setLoading(true);
-      const [transactionsData, accountsData] = await Promise.all([
+      const [transactionsData, accountsData, statsData, categoryData] = await Promise.all([
         plaidApi.getTransactions(filters),
         plaidApi.getAccounts(),
+        plaidApi.getTransactionStats(filters),
+        plaidApi.getCategories(),
       ]);
       console.log("transactionsData");
       console.log(transactionsData);
@@ -121,9 +146,8 @@ export default function TransactionsPage() {
         offset: filters.offset || 0,
       });
       setAccounts(accountsData);
+      setTransactionStats(statsData);
 
-      // Get all transactions for category analysis (without pagination)
-      const categoryData = await plaidApi.getCategories();
       console.log("categoryData");
       console.log(categoryData);
       setAvailableCategories(categoryData);
@@ -168,61 +192,8 @@ export default function TransactionsPage() {
   const calculatedCurrentPage =
     Math.floor(pagination.offset / pagination.limit) + 1;
 
-  // Apply client-side filtering for search and status
-  let filteredTransactions = transactions;
-
-  // Apply search filter (client-side)
-  if (searchTerm.trim()) {
-    filteredTransactions = filteredTransactions.filter(
-      (transaction) =>
-        transaction.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (transaction.merchantName &&
-          transaction.merchantName
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()))
-    );
-  }
-
-  // Apply status filter (client-side)
-  if (selectedStatus !== "all") {
-    filteredTransactions = filteredTransactions.filter((transaction) => {
-      if (selectedStatus === "pending") {
-        return transaction.pending;
-      } else if (selectedStatus === "completed") {
-        return !transaction.pending;
-      }
-      return true;
-    });
-  }
-
-  // Apply sorting (client-side)
-  filteredTransactions.sort((a, b) => {
-    let aValue: any;
-    let bValue: any;
-
-    switch (sortBy) {
-      case "date":
-        aValue = new Date(a.date);
-        bValue = new Date(b.date);
-        break;
-      case "amount":
-        aValue = Math.abs(a.amount);
-        bValue = Math.abs(b.amount);
-        break;
-      case "name":
-        aValue = a.name.toLowerCase();
-        bValue = b.name.toLowerCase();
-        break;
-      default:
-        return 0;
-    }
-
-    if (sortOrder === "asc") {
-      return aValue > bValue ? 1 : -1;
-    } else {
-      return aValue < bValue ? 1 : -1;
-    }
-  });
+  // Use transactions directly from backend (already filtered and sorted)
+  const filteredTransactions = transactions;
 
   const creditCardMetrics = calculateCreditCardMetrics(filteredTransactions);
   const categoryData = processCategoryData(filteredTransactions);
@@ -232,16 +203,10 @@ export default function TransactionsPage() {
     filters.endDate || getCurrentYearRange().endDate
   );
 
-  // Apply pagination to filtered results
-  const paginatedTransactions = filteredTransactions.slice(
-    (calculatedCurrentPage - 1) * itemsPerPage,
-    calculatedCurrentPage * itemsPerPage
-  );
+  // Use transactions directly from backend (already paginated)
+  const paginatedTransactions = filteredTransactions;
 
-  const totalSpending = filteredTransactions.reduce(
-    (sum, t) => sum + Math.abs(t.amount),
-    0
-  );
+  // Total spending is now calculated on the backend
 
   if (loading) {
     return (
@@ -302,7 +267,7 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {filteredTransactions.length}
+                {transactionStats.totalCount}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Showing {filteredTransactions.length} of {pagination.total}
@@ -319,7 +284,7 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {formatCurrency(totalSpending)}
+                {formatCurrency(transactionStats.totalSpending)}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 This period
@@ -336,11 +301,7 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {formatCurrency(
-                  filteredTransactions.length > 0
-                    ? totalSpending / filteredTransactions.length
-                    : 0
-                )}
+                {formatCurrency(transactionStats.averageAmount)}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Per transaction
@@ -357,12 +318,7 @@ export default function TransactionsPage() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-orange-600">
-                {formatCurrency(
-                  filteredTransactions.reduce(
-                    (max, t) => Math.max(max, Math.abs(t.amount)),
-                    0
-                  )
-                )}
+                {formatCurrency(transactionStats.largestAmount)}
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 Single purchase
@@ -482,9 +438,10 @@ export default function TransactionsPage() {
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
                   {availableCategories.map((categoryStats) => (
                     <SelectItem key={String(categoryStats.category)} value={categoryStats.category}>
-                      {categoryStats.category === "all" ? "All Categories" : categoryStats.category}
+                      {categoryStats.category}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -588,7 +545,7 @@ export default function TransactionsPage() {
               Transaction History
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-gray-400">
-              {paginatedTransactions.length} of {filteredTransactions.length}{" "}
+              {paginatedTransactions.length} of {pagination.total}{" "}
               transactions
             </CardDescription>
           </CardHeader>
@@ -673,9 +630,9 @@ export default function TransactionsPage() {
                   Showing {(calculatedCurrentPage - 1) * itemsPerPage + 1} to{" "}
                   {Math.min(
                     calculatedCurrentPage * itemsPerPage,
-                    filteredTransactions.length
+                    pagination.total
                   )}{" "}
-                  of {filteredTransactions.length} transactions
+                  of {pagination.total} transactions
                 </div>
                 <div className="flex gap-2">
                   <Button
