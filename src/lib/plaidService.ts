@@ -371,7 +371,7 @@ export class PlaidService {
                 },
             });
 
-            const largestAmount = largestTransaction ? Math.abs(largestTransaction.amount) : 0;
+            const largestAmount = largestTransaction ? Math.abs(Number(largestTransaction.amount)) : 0;
 
             return {
                 totalCount,
