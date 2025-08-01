@@ -50,6 +50,8 @@ export const plaidApi = {
         if (filters.category) params.append('category', filters.category);
 
         const response = await api.get<TransactionsResponse>(`/api/plaid/transactions?${params.toString()}`);
+        console.log('response.data');
+        console.log(response.data);
         return response.data;
     },
 

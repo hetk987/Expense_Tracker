@@ -12,9 +12,17 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import ConfirmationModal from "@/components/ui/confirmation-modal";
 
 interface AccountManagerProps {
   onAccountsChange?: () => void;
+}
+
+interface UnlinkModalState {
+  isOpen: boolean;
+  accountId: string | null;
+  accountName: string;
+  isBulkUnlink: boolean;
 }
 
 export default function AccountManager({
@@ -25,6 +33,12 @@ export default function AccountManager({
   const [unlinking, setUnlinking] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [unlinkModal, setUnlinkModal] = useState<UnlinkModalState>({
+    isOpen: false,
+    accountId: null,
+    accountName: "",
+    isBulkUnlink: false,
+  });
 
   const fetchAccounts = async () => {
     try {
@@ -44,29 +58,54 @@ export default function AccountManager({
     fetchAccounts();
   }, []);
 
-  const handleUnlinkAccount = async (
+  const openUnlinkModal = (
     accountId: string,
-    accountName: string
+    accountName: string,
+    isBulk: boolean = false
   ) => {
-    if (
-      !confirm(
-        `Are you sure you want to unlink "${accountName}"? This will permanently delete all associated transaction data.`
-      )
-    ) {
-      return;
-    }
+    setUnlinkModal({
+      isOpen: true,
+      accountId,
+      accountName,
+      isBulkUnlink: isBulk,
+    });
+  };
+
+  const closeUnlinkModal = () => {
+    setUnlinkModal({
+      isOpen: false,
+      accountId: null,
+      accountName: "",
+      isBulkUnlink: false,
+    });
+  };
+
+  const handleUnlinkConfirm = async () => {
+    if (!unlinkModal.accountId) return;
 
     try {
-      setUnlinking(accountId);
+      setUnlinking(unlinkModal.accountId);
       setError(null);
       setSuccess(null);
 
-      const result = await plaidApi.unlinkAccount(accountId);
+      let result;
+      if (unlinkModal.isBulkUnlink) {
+        const accountIds = accounts.map((account) => account.id);
+        result = await plaidApi.unlinkAccounts(accountIds);
+      } else {
+        result = await plaidApi.unlinkAccount(unlinkModal.accountId);
+      }
 
       if (result.success) {
-        setSuccess(
-          `Successfully unlinked ${result.accountName}. Deleted ${result.deletedTransactions} transactions.`
-        );
+        if (unlinkModal.isBulkUnlink) {
+          setSuccess(
+            `Successfully unlinked ${result.successful} accounts. Deleted transactions from all accounts.`
+          );
+        } else {
+          setSuccess(
+            `Successfully unlinked ${result.accountName}. Deleted ${result.deletedTransactions} transactions.`
+          );
+        }
         await fetchAccounts(); // Refresh the accounts list
         onAccountsChange?.(); // Notify parent component
       } else {
@@ -77,42 +116,7 @@ export default function AccountManager({
       setError("Failed to unlink account. Please try again.");
     } finally {
       setUnlinking(null);
-    }
-  };
-
-  const handleUnlinkAllAccounts = async () => {
-    if (
-      !confirm(
-        "Are you sure you want to unlink ALL accounts? This will permanently delete all transaction data. This action cannot be undone."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      setUnlinking("all");
-      setError(null);
-      setSuccess(null);
-
-      const accountIds = accounts.map((account) => account.id);
-      const result = await plaidApi.unlinkAccounts(accountIds);
-
-      if (result.success) {
-        setSuccess(
-          `Successfully unlinked ${result.successful} accounts. Deleted transactions from all accounts.`
-        );
-        await fetchAccounts(); // Refresh the accounts list
-        onAccountsChange?.(); // Notify parent component
-      } else {
-        setError(
-          `Failed to unlink some accounts. ${result.failed} accounts failed to unlink.`
-        );
-      }
-    } catch (err) {
-      console.error("Error unlinking all accounts:", err);
-      setError("Failed to unlink accounts. Please try again.");
-    } finally {
-      setUnlinking(null);
+      closeUnlinkModal();
     }
   };
 
@@ -141,7 +145,7 @@ export default function AccountManager({
             {accounts.length > 0 && (
               <Button
                 variant="destructive"
-                onClick={handleUnlinkAllAccounts}
+                onClick={() => openUnlinkModal("", "all accounts", true)}
                 disabled={unlinking === "all"}
               >
                 {unlinking === "all" ? "Unlinking..." : "Unlink All"}
@@ -197,9 +201,7 @@ export default function AccountManager({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      handleUnlinkAccount(account.id, account.name)
-                    }
+                    onClick={() => openUnlinkModal(account.id, account.name)}
                     disabled={unlinking === account.id || unlinking === "all"}
                     className="text-red-600 hover:text-red-700 hover:bg-red-50"
                   >
@@ -211,6 +213,31 @@ export default function AccountManager({
           )}
         </CardContent>
       </Card>
+
+      {/* Custom Unlink Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={unlinkModal.isOpen}
+        onClose={closeUnlinkModal}
+        onConfirm={handleUnlinkConfirm}
+        title={
+          unlinkModal.isBulkUnlink
+            ? "Unlink All Accounts"
+            : `Unlink ${unlinkModal.accountName}`
+        }
+        description={
+          unlinkModal.isBulkUnlink
+            ? "Are you sure you want to unlink ALL accounts? This will permanently delete all transaction data from all accounts."
+            : `Are you sure you want to unlink "${unlinkModal.accountName}"? This will permanently delete all associated transaction data.`
+        }
+        confirmText={
+          unlinkModal.isBulkUnlink ? "Unlink All Accounts" : "Unlink Account"
+        }
+        cancelText="Cancel"
+        type="danger"
+        loading={unlinking !== null}
+        accountName={unlinkModal.accountName}
+        isBulkAction={unlinkModal.isBulkUnlink}
+      />
     </div>
   );
 }

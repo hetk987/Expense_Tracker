@@ -280,7 +280,7 @@ export class PlaidService {
 
             const startDate = lastTransaction
                 ? lastTransaction.date.toISOString().split('T')[0]
-                : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; // 30 days ago
+                : new Date(new Date().getFullYear(), 0, 1).toISOString().split('T')[0]; // Start of current year
 
             const endDate = new Date().toISOString().split('T')[0];
 

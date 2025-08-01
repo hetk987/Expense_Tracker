@@ -59,7 +59,6 @@ export default function TransactionsPage() {
   const [filters, setFilters] = useState<TransactionFilters>({
     limit: 50,
     offset: 0,
-    ...getCurrentMonthRange(),
   });
   const [pagination, setPagination] = useState({
     total: 0,
@@ -75,7 +74,7 @@ export default function TransactionsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState<"date" | "amount" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const itemsPerPage = 20;
+  const itemsPerPage = 50;
 
   useEffect(() => {
     loadData();
