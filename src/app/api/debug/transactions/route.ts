@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prismaClient';
 import { debugProtected, logDebugAccess } from '@/lib/debugAuth';
+import { filterOutCreditCardPayments, getCreditCardPayments } from '@/lib/chartUtils';
 
 async function getTransactionsHandler(request: NextRequest) {
     try {
@@ -13,6 +14,7 @@ async function getTransactionsHandler(request: NextRequest) {
         const accountId = searchParams.get('accountId');
         const startDate = searchParams.get('startDate');
         const endDate = searchParams.get('endDate');
+        const showCreditCardPayments = searchParams.get('showCreditCardPayments') === 'true';
 
         // Build where clause
         const where: any = {};
@@ -96,57 +98,42 @@ async function getTransactionsHandler(request: NextRequest) {
             take: 10,
         });
 
+        // Filter out credit card payments for spending calculations
+        const filteredTransactions = filterOutCreditCardPayments(transactions);
+        const creditCardPayments = getCreditCardPayments(transactions);
+
+        // Calculate spending statistics excluding credit card payments
+        const spendingTransactions = filteredTransactions.filter(t => t.amount < 0);
+        const totalSpending = spendingTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+        const averageSpending = spendingTransactions.length > 0 ? totalSpending / spendingTransactions.length : 0;
+
         return NextResponse.json({
             total,
-            limit,
-            offset,
-            hasMore: offset + limit < total,
             summary: {
-                totalTransactions: summary._count.id,
-                totalAmount: summary._sum.amount,
-                averageAmount: summary._avg.amount,
-                minAmount: summary._min.amount,
-                maxAmount: summary._max.amount,
-                dateRange: {
-                    earliest: summary._min.date,
-                    latest: summary._max.date,
-                },
+                ...summary,
+                totalSpendingExcludingPayments: totalSpending,
+                averageSpendingExcludingPayments: averageSpending,
+                creditCardPaymentsCount: creditCardPayments.length,
+                creditCardPaymentsTotal: creditCardPayments.reduce((sum, t) => sum + Number(t.amount), 0),
             },
-            topCategories: categoryStats.map(stat => ({
+            categoryStats: categoryStats.map(stat => ({
                 category: stat.category,
                 count: stat._count.id,
-                totalAmount: stat._sum.amount,
+                totalAmount: Math.abs(Number(stat._sum.amount || 0)),
             })),
-            transactions: transactions.map(transaction => ({
-                id: transaction.id,
-                plaidTransactionId: transaction.plaidTransactionId,
-                amount: transaction.amount,
-                currency: transaction.currency,
-                date: transaction.date,
-                name: transaction.name,
-                merchantName: transaction.merchantName,
-                category: transaction.category,
-                pending: transaction.pending,
-                paymentChannel: transaction.paymentChannel,
-                transactionType: transaction.transactionType,
-                createdAt: transaction.createdAt,
-                updatedAt: transaction.updatedAt,
-                account: transaction.account,
-            })),
-            debug: {
-                environment: process.env.NODE_ENV,
-                timestamp: new Date().toISOString(),
-                queryParams: {
-                    limit,
-                    offset,
-                    accountId,
-                    startDate,
-                    endDate,
-                },
+            transactions: showCreditCardPayments ? transactions : filteredTransactions,
+            creditCardPayments: showCreditCardPayments ? creditCardPayments : undefined,
+            filters: {
+                accountId,
+                startDate,
+                endDate,
+                limit,
+                offset,
+                showCreditCardPayments,
             },
         });
     } catch (error) {
-        console.error('Error fetching transactions:', error);
+        console.error('Error in getTransactionsHandler:', error);
         return NextResponse.json(
             { error: 'Failed to fetch transactions' },
             { status: 500 }

@@ -292,6 +292,7 @@ export class PlaidService {
 
     /**
      * Gets transaction statistics with optional filtering
+     * Excludes credit card payments from spending calculations
      */
     static async getTransactionStats(filters: TransactionFilters = {}) {
         try {
@@ -344,32 +345,34 @@ export class PlaidService {
                 }
             }
 
-            // Get total count
-            const totalCount = await prisma.plaidTransaction.count({ where });
-
-            // Get total spending (sum of absolute amounts)
-            const totalSpendingResult = await prisma.plaidTransaction.aggregate({
+            // Get all transactions to filter out credit card payments
+            const allTransactions = await prisma.plaidTransaction.findMany({
                 where,
-                _sum: {
+                select: {
+                    id: true,
                     amount: true,
+                    name: true,
+                    merchantName: true,
                 },
             });
 
-            const totalSpending = Math.abs(Number((totalSpendingResult._sum.amount as any) || 0));
+            // Import the filtering function
+            const { filterOutCreditCardPayments } = await import('./chartUtils');
 
-            // Get average transaction amount
+            // Filter out credit card payments
+            const filteredTransactions = filterOutCreditCardPayments(allTransactions);
+
+            // Calculate statistics on filtered transactions
+            const totalCount = filteredTransactions.length;
+            const totalSpending = filteredTransactions
+                .filter(t => t.amount < 0) // Only count expenses (negative amounts)
+                .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
             const averageAmount = totalCount > 0 ? totalSpending / totalCount : 0;
 
-            // Get largest transaction
-            const largestTransaction = await prisma.plaidTransaction.findFirst({
-                where,
-                orderBy: {
-                    amount: 'desc',
-                },
-                select: {
-                    amount: true,
-                },
-            });
+            // Get largest expense transaction
+            const largestTransaction = filteredTransactions
+                .filter(t => t.amount < 0) // Only expenses
+                .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))[0];
 
             const largestAmount = largestTransaction ? Math.abs(Number(largestTransaction.amount)) : 0;
 
@@ -387,6 +390,7 @@ export class PlaidService {
 
     /**
      * Gets all unique categories from transactions with optional filtering
+     * Excludes credit card payments from spending calculations
      */
     static async getCategories(filters: { accountId?: string; startDate?: string; endDate?: string } = {}) {
         try {
@@ -408,24 +412,45 @@ export class PlaidService {
                 }
             }
 
-            // Get all unique categories with their transaction counts and total amounts
-            const categoryStats = await prisma.plaidTransaction.groupBy({
-                by: ['category'],
+            // Get all transactions to filter out credit card payments
+            const allTransactions = await prisma.plaidTransaction.findMany({
                 where: whereClause,
-                _count: {
-                    id: true, // Count of transactions
-                },
-                _sum: {
-                    amount: true, // Sum of amounts
+                select: {
+                    id: true,
+                    amount: true,
+                    name: true,
+                    merchantName: true,
+                    category: true,
                 },
             });
 
+            // Import the filtering function
+            const { filterOutCreditCardPayments } = await import('./chartUtils');
+
+            // Filter out credit card payments
+            const filteredTransactions = filterOutCreditCardPayments(allTransactions);
+
+            // Group by category and calculate statistics
+            const categoryMap = new Map<string, { count: number; totalAmount: number }>();
+
+            filteredTransactions.forEach(transaction => {
+                if (transaction.amount < 0) { // Only count expenses
+                    const category = transaction.category || 'Uncategorized';
+                    const current = categoryMap.get(category) || { count: 0, totalAmount: 0 };
+
+                    categoryMap.set(category, {
+                        count: current.count + 1,
+                        totalAmount: current.totalAmount + Math.abs(Number(transaction.amount))
+                    });
+                }
+            });
+
             // Transform the results into the expected format
-            const categories = categoryStats.map(stat => ({
-                category: stat.category,
-                count: stat._count.id,
-                totalAmount: Math.abs(Number(stat._sum.amount || 0)),
-                averageAmount: Math.abs(Number(stat._sum.amount || 0) / stat._count.id),
+            const categories = Array.from(categoryMap.entries()).map(([category, stats]) => ({
+                category,
+                count: stats.count,
+                totalAmount: stats.totalAmount,
+                averageAmount: stats.count > 0 ? stats.totalAmount / stats.count : 0,
             }));
 
             // Sort by total amount descending

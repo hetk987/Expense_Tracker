@@ -57,6 +57,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import AuthWrapper from "@/components/AuthWrapper";
+import Image from "next/image";
 
 export default function TransactionsPage() {
   const [transactions, setTransactions] = useState<PlaidTransaction[]>([]);
@@ -92,16 +93,18 @@ export default function TransactionsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [selectedStatus, setSelectedStatus] = useState<string>("all");
+  const [selectedLimit, setSelectedLimit] = useState<number>(
+    filters.limit || 50
+  );
   const [currentPage, setCurrentPage] = useState(1);
   const [sortBy, setSortBy] = useState<"date" | "amount" | "name">("date");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
-  const itemsPerPage = 50;
 
   useEffect(() => {
     loadData();
   }, [filters]);
 
-  // Apply filters when search, category, status, or sort changes
+  // Apply filters when search, category, status, sort, or limit changes
   useEffect(() => {
     const newFilters: TransactionFilters = {
       ...filters,
@@ -133,8 +136,18 @@ export default function TransactionsPage() {
     newFilters.sortBy = sortBy;
     newFilters.sortOrder = sortOrder;
 
+    // Apply limit
+    newFilters.limit = selectedLimit;
+
     setFilters(newFilters);
-  }, [selectedCategory, selectedStatus, searchTerm, sortBy, sortOrder]);
+  }, [
+    selectedCategory,
+    selectedStatus,
+    searchTerm,
+    sortBy,
+    sortOrder,
+    selectedLimit,
+  ]);
 
   const loadData = async () => {
     try {
@@ -151,7 +164,7 @@ export default function TransactionsPage() {
       setTransactions(transactionsData.transactions);
       setPagination({
         total: transactionsData.total,
-        limit: filters.limit || 100,
+        limit: filters.limit || 50,
         offset: filters.offset || 0,
       });
       setAccounts(accountsData);
@@ -420,7 +433,7 @@ export default function TransactionsPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -511,6 +524,28 @@ export default function TransactionsPage() {
                   <SelectItem value="name-desc">Name (Z-A)</SelectItem>
                 </SelectContent>
               </Select>
+
+              {/* Limit Selection */}
+              <Select
+                value={String(selectedLimit)}
+                onValueChange={(value) => {
+                  const newLimit = parseInt(value);
+                  setSelectedLimit(newLimit);
+                  handleFilterChange("limit", newLimit);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Limit" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10 per page</SelectItem>
+                  <SelectItem value="25">25 per page</SelectItem>
+                  <SelectItem value="50">50 per page</SelectItem>
+                  <SelectItem value="100">100 per page</SelectItem>
+                  <SelectItem value="250">250 per page</SelectItem>
+                  <SelectItem value="500">500 per page</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Quick Date Filters */}
@@ -592,8 +627,15 @@ export default function TransactionsPage() {
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
                   >
                     <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                        <DollarSign className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                      <div className="w-14 h-14 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                        {transaction.categoryIcon && (
+                          <Image
+                            src={transaction.categoryIcon || ""}
+                            width={60}
+                            height={60}
+                            alt={transaction.category}
+                          />
+                        )}
                       </div>
                       <div>
                         <p className="font-medium text-gray-900 dark:text-white">
@@ -647,12 +689,13 @@ export default function TransactionsPage() {
             )}
 
             {/* Pagination */}
-            {pagination.total > itemsPerPage && (
+            {pagination.total > pagination.limit && (
               <div className="flex items-center justify-between mt-6">
                 <div className="text-sm text-gray-500 dark:text-gray-400">
-                  Showing {(calculatedCurrentPage - 1) * itemsPerPage + 1} to{" "}
+                  Showing {(calculatedCurrentPage - 1) * pagination.limit + 1}{" "}
+                  to{" "}
                   {Math.min(
-                    calculatedCurrentPage * itemsPerPage,
+                    calculatedCurrentPage * pagination.limit,
                     pagination.total
                   )}{" "}
                   of {pagination.total} transactions
