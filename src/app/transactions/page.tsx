@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Card,
   CardContent,
@@ -26,6 +26,7 @@ import {
   BarChart3,
   PieChart,
   TrendingUp,
+  AlertCircle,
 } from "lucide-react";
 import { plaidApi } from "@/lib/api";
 import {
@@ -59,24 +60,78 @@ import {
 import AuthWrapper from "@/components/AuthWrapper";
 import Image from "next/image";
 
+// Skeleton loading component
+const TransactionSkeleton = () => (
+  <div className="animate-pulse space-y-4">
+    {[...Array(5)].map((_, i) => (
+      <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 bg-gray-200 rounded-full"></div>
+          <div className="space-y-2">
+            <div className="h-4 bg-gray-200 rounded w-32"></div>
+            <div className="h-3 bg-gray-200 rounded w-24"></div>
+          </div>
+        </div>
+        <div className="text-right space-y-2">
+          <div className="h-5 bg-gray-200 rounded w-20"></div>
+          <div className="h-3 bg-gray-200 rounded w-16"></div>
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// Custom debounce hook for search input
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+
+  return debouncedValue;
+}
+
 export default function TransactionsPage() {
+  // Core data state
   const [transactions, setTransactions] = useState<PlaidTransaction[]>([]);
   const [accounts, setAccounts] = useState<PlaidAccount[]>([]);
+  const [availableCategories, setAvailableCategories] = useState<CategoryStats[]>([]);
+  
+  // Loading and error states
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  
+  // UI state
+  const [showCharts, setShowCharts] = useState(false);
+  const [chartView, setChartView] = useState<"pie" | "bar" | "line">("pie");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  
+  // Unified filter state (simplified)
   const [filters, setFilters] = useState<TransactionFilters>({
     limit: 50,
     offset: 0,
+    sortBy: "date",
+    sortOrder: "desc",
     ...getCurrentYearRange(),
   });
+  
+  // Pagination state
   const [pagination, setPagination] = useState({
     total: 0,
     limit: 50,
     offset: 0,
   });
-  const [availableCategories, setAvailableCategories] = useState<
-    CategoryStats[]
-  >([]);
+  
+  // Transaction stats state
   const [transactionStats, setTransactionStats] = useState<{
     totalCount: number;
     totalSpending: number;
@@ -88,72 +143,53 @@ export default function TransactionsPage() {
     averageAmount: 0,
     largestAmount: 0,
   });
-  const [showCharts, setShowCharts] = useState(false);
-  const [chartView, setChartView] = useState<"pie" | "bar" | "line">("pie");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [selectedStatus, setSelectedStatus] = useState<string>("all");
-  const [selectedLimit, setSelectedLimit] = useState<number>(
-    filters.limit || 50
-  );
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortBy, setSortBy] = useState<"date" | "amount" | "name">("date");
-  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
 
+  // Debounced search term
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+
+  // Memoized computed values
+  const currentPage = useMemo(() => 
+    Math.floor(pagination.offset / pagination.limit) + 1, 
+    [pagination.offset, pagination.limit]
+  );
+  
+  const totalPages = useMemo(() => 
+    Math.ceil(pagination.total / pagination.limit), 
+    [pagination.total, pagination.limit]
+  );
+
+  // Memoized chart data for performance
+  const chartData = useMemo(() => ({
+    creditCardMetrics: calculateCreditCardMetrics(transactions),
+    categoryData: processCategoryData(transactions),
+    timeSeriesData: processTimeSeriesData(
+      transactions,
+      filters.startDate || getCurrentYearRange().startDate,
+      filters.endDate || getCurrentYearRange().endDate
+    ),
+  }), [transactions, filters.startDate, filters.endDate]);
+
+  // Update filters when search term changes (debounced)
+  useEffect(() => {
+    setFilters(prev => ({
+      ...prev,
+      search: debouncedSearchTerm.trim() || undefined,
+      offset: 0, // Reset pagination
+    }));
+  }, [debouncedSearchTerm]);
+
+  // Load data when filters change
   useEffect(() => {
     loadData();
   }, [filters]);
 
-  // Apply filters when search, category, status, sort, or limit changes
-  useEffect(() => {
-    const newFilters: TransactionFilters = {
-      ...filters,
-      offset: 0, // Reset pagination when filters change
-    };
-
-    // Apply category filter
-    if (selectedCategory && selectedCategory !== "all") {
-      newFilters.category = selectedCategory;
-    } else {
-      delete newFilters.category;
-    }
-
-    // Apply search filter
-    if (searchTerm.trim()) {
-      newFilters.search = searchTerm.trim();
-    } else {
-      delete newFilters.search;
-    }
-
-    // Apply status filter
-    if (selectedStatus && selectedStatus !== "all") {
-      newFilters.status = selectedStatus;
-    } else {
-      delete newFilters.status;
-    }
-
-    // Apply sort
-    newFilters.sortBy = sortBy;
-    newFilters.sortOrder = sortOrder;
-
-    // Apply limit
-    newFilters.limit = selectedLimit;
-
-    setFilters(newFilters);
-  }, [
-    selectedCategory,
-    selectedStatus,
-    searchTerm,
-    sortBy,
-    sortOrder,
-    selectedLimit,
-  ]);
-
-  const loadData = async () => {
+  // Optimized data loading with error handling
+  const loadData = useCallback(async () => {
     try {
+      setError(null);
       setLoading(true);
       const dashboardData = await plaidApi.getDashboardData(filters);
-
+      
       setTransactions(dashboardData.transactions);
       setTransactionStats(dashboardData.stats);
       setAvailableCategories(dashboardData.categories);
@@ -161,66 +197,84 @@ export default function TransactionsPage() {
       setPagination(dashboardData.pagination);
     } catch (error) {
       console.error("Error loading dashboard data:", error);
+      setError(error instanceof Error ? error.message : 'Failed to load transactions');
     } finally {
       setLoading(false);
     }
-  };
+  }, [filters]);
 
-  const handleSyncTransactions = async () => {
+  // Optimized sync function
+  const handleSyncTransactions = useCallback(async () => {
     try {
+      setError(null);
       setSyncing(true);
       await plaidApi.syncTransactions();
       await loadData();
     } catch (error) {
       console.error("Error syncing transactions:", error);
+      setError(error instanceof Error ? error.message : 'Failed to sync transactions');
     } finally {
       setSyncing(false);
     }
-  };
+  }, [loadData]);
 
-  const handleFilterChange = (
+  // Optimized filter change handler
+  const handleFilterChange = useCallback((
     key: keyof TransactionFilters,
     value: string | number
   ) => {
-    setFilters((prev) => ({
+    setFilters(prev => ({
       ...prev,
       [key]: value,
       offset: 0, // Reset pagination when filters change
     }));
-  };
+  }, []);
 
-  const handlePageChange = (newOffset: number) => {
-    setFilters((prev) => ({
+  // Optimized pagination handler
+  const handlePageChange = useCallback((newOffset: number) => {
+    setFilters(prev => ({
       ...prev,
       offset: newOffset,
     }));
-  };
+  }, []);
 
-  const totalPages = Math.ceil(pagination.total / pagination.limit);
-  const calculatedCurrentPage =
-    Math.floor(pagination.offset / pagination.limit) + 1;
+  // Quick date filter handlers
+  const handleQuickDateFilter = useCallback((range: { startDate: string; endDate: string }) => {
+    setFilters(prev => ({
+      ...prev,
+      startDate: range.startDate,
+      endDate: range.endDate,
+      offset: 0,
+    }));
+  }, []);
+
+  // Clear all filters
+  const clearFilters = useCallback(() => {
+    setFilters({
+      limit: 50,
+      offset: 0,
+      sortBy: "date",
+      sortOrder: "desc",
+      ...getCurrentYearRange(),
+    });
+    setSearchTerm("");
+  }, []);
 
   // Use transactions directly from backend (already filtered and sorted)
   const filteredTransactions = transactions;
-
-  const creditCardMetrics = calculateCreditCardMetrics(filteredTransactions);
-  const categoryData = processCategoryData(filteredTransactions);
-  const timeSeriesData = processTimeSeriesData(
-    filteredTransactions,
-    filters.startDate || getCurrentYearRange().startDate,
-    filters.endDate || getCurrentYearRange().endDate
-  );
-
-  // Use transactions directly from backend (already paginated)
-  const paginatedTransactions = filteredTransactions;
 
   // Total spending is now calculated on the backend
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
+      <AuthWrapper>
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 dark:text-gray-400">Loading transactions...</p>
+          </div>
+        </div>
+      </AuthWrapper>
     );
   }
 
@@ -236,19 +290,29 @@ export default function TransactionsPage() {
             <p className="text-gray-600 dark:text-gray-400">
               View and analyze your credit card spending
             </p>
+            {error && (
+              <div className="flex items-center gap-2 text-red-600 dark:text-red-400 mt-2">
+                <AlertCircle className="h-4 w-4" />
+                <span className="text-sm">{error}</span>
+              </div>
+            )}
           </div>
           <div className="flex gap-3">
+            <Button
+              onClick={() => setShowFilters(!showFilters)}
+              variant="outline"
+              className="flex items-center gap-2"
+            >
+              <Filter className="h-4 w-4" />
+              {showFilters ? "Hide Filters" : "Show Filters"}
+            </Button>
             <Button
               onClick={() => setShowCharts(!showCharts)}
               variant="outline"
               className="flex items-center gap-2"
             >
-              {showCharts ? (
-                <CreditCard className="h-4 w-4" />
-              ) : (
-                <BarChart3 className="h-4 w-4" />
-              )}
-              {showCharts ? "Hide Charts" : "Show Charts"}
+              <BarChart3 className="h-4 w-4" />
+              {showCharts ? "Hide Analytics" : "Show Analytics"}
             </Button>
             <Button
               onClick={handleSyncTransactions}
@@ -367,32 +431,12 @@ export default function TransactionsPage() {
               </div>
               {chartView === "pie" ? (
                 <CategoryPieChart
-                  data={availableCategories.map((cat) => ({
-                    ...cat,
-                    amount: cat.totalAmount,
-                    percentage:
-                      (cat.totalAmount /
-                        availableCategories.reduce(
-                          (sum, c) => sum + c.totalAmount,
-                          0
-                        )) *
-                      100,
-                  }))}
+                  data={chartData.categoryData}
                   title=""
                 />
               ) : (
                 <CategoryBarChart
-                  data={availableCategories.map((cat) => ({
-                    ...cat,
-                    amount: cat.totalAmount,
-                    percentage:
-                      (cat.totalAmount /
-                        availableCategories.reduce(
-                          (sum, c) => sum + c.totalAmount,
-                          0
-                        )) *
-                      100,
-                  }))}
+                  data={chartData.categoryData}
                   title=""
                 />
               )}
@@ -403,23 +447,24 @@ export default function TransactionsPage() {
               <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
                 Spending Over Time
               </h2>
-              <SpendingLineChart data={timeSeriesData} title="" />
+              <SpendingLineChart data={chartData.timeSeriesData} title="" />
             </div>
           </div>
         )}
 
         {/* Filters */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle className="text-gray-900 dark:text-white">
-              Filters
-            </CardTitle>
-            <CardDescription className="text-gray-600 dark:text-gray-400">
-              Search and filter your transactions
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
+        {showFilters && (
+          <Card className="mb-8">
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-white">
+                Filters
+              </CardTitle>
+              <CardDescription className="text-gray-600 dark:text-gray-400">
+                Search and filter your transactions
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Search */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -451,8 +496,8 @@ export default function TransactionsPage() {
 
               {/* Category Filter */}
               <Select
-                value={selectedCategory}
-                onValueChange={setSelectedCategory}
+                value={filters.category || "all"}
+                onValueChange={(value) => handleFilterChange("category", value)}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Category" />
@@ -471,7 +516,7 @@ export default function TransactionsPage() {
               </Select>
 
               {/* Status Filter */}
-              <Select value={selectedStatus} onValueChange={setSelectedStatus}>
+              <Select value={filters.status || "all"} onValueChange={(value) => handleFilterChange("status", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
@@ -484,14 +529,14 @@ export default function TransactionsPage() {
 
               {/* Sort */}
               <Select
-                value={`${sortBy}-${sortOrder}`}
+                value={`${filters.sortBy}-${filters.sortOrder}`}
                 onValueChange={(value) => {
                   const [newSortBy, newSortOrder] = value.split("-") as [
                     "date" | "amount" | "name",
                     "asc" | "desc"
                   ];
-                  setSortBy(newSortBy);
-                  setSortOrder(newSortOrder);
+                  handleFilterChange("sortBy", newSortBy);
+                  handleFilterChange("sortOrder", newSortOrder);
                 }}
               >
                 <SelectTrigger>
@@ -513,10 +558,9 @@ export default function TransactionsPage() {
 
               {/* Limit Selection */}
               <Select
-                value={String(selectedLimit)}
+                value={String(filters.limit)}
                 onValueChange={(value) => {
                   const newLimit = parseInt(value);
-                  setSelectedLimit(newLimit);
                   handleFilterChange("limit", newLimit);
                 }}
               >
@@ -541,8 +585,7 @@ export default function TransactionsPage() {
                 size="sm"
                 onClick={() => {
                   const range = getCurrentYearRange();
-                  handleFilterChange("startDate", range.startDate);
-                  handleFilterChange("endDate", range.endDate);
+                  handleQuickDateFilter(range);
                 }}
               >
                 This Year
@@ -552,8 +595,7 @@ export default function TransactionsPage() {
                 size="sm"
                 onClick={() => {
                   const range = getCurrentMonthRange();
-                  handleFilterChange("startDate", range.startDate);
-                  handleFilterChange("endDate", range.endDate);
+                  handleQuickDateFilter(range);
                 }}
               >
                 This Month
@@ -563,8 +605,7 @@ export default function TransactionsPage() {
                 size="sm"
                 onClick={() => {
                   const range = getLast30DaysRange();
-                  handleFilterChange("startDate", range.startDate);
-                  handleFilterChange("endDate", range.endDate);
+                  handleQuickDateFilter(range);
                 }}
               >
                 Last 30 Days
@@ -572,16 +613,14 @@ export default function TransactionsPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  handleFilterChange("startDate", "");
-                  handleFilterChange("endDate", "");
-                }}
+                onClick={clearFilters}
               >
                 Clear Dates
               </Button>
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Transactions List */}
         <Card>
@@ -590,11 +629,13 @@ export default function TransactionsPage() {
               Transaction History
             </CardTitle>
             <CardDescription className="text-gray-600 dark:text-gray-400">
-              {paginatedTransactions.length} of {pagination.total} transactions
+              {filteredTransactions.length} of {pagination.total} transactions
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            {paginatedTransactions.length === 0 ? (
+                      <CardContent>
+              {loading ? (
+                <TransactionSkeleton />
+              ) : filteredTransactions.length === 0 ? (
               <div className="text-center py-12">
                 <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-600 dark:text-gray-400 mb-2">
@@ -607,7 +648,7 @@ export default function TransactionsPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {paginatedTransactions.map((transaction) => (
+                {filteredTransactions.map((transaction) => (
                   <div
                     key={transaction.id}
                     className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
@@ -676,16 +717,16 @@ export default function TransactionsPage() {
 
             {/* Pagination */}
             {pagination.total > pagination.limit && (
-              <div className="flex items-center justify-between mt-6">
-                <div className="text-sm text-gray-500 dark:text-gray-400">
-                  Showing {(calculatedCurrentPage - 1) * pagination.limit + 1}{" "}
-                  to{" "}
-                  {Math.min(
-                    calculatedCurrentPage * pagination.limit,
-                    pagination.total
-                  )}{" "}
-                  of {pagination.total} transactions
-                </div>
+                              <div className="flex items-center justify-between mt-6">
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Showing {(currentPage - 1) * (filters.limit || 50) + 1}{" "}
+                    to{" "}
+                    {Math.min(
+                      currentPage * (filters.limit || 50),
+                      pagination.total
+                    )}{" "}
+                    of {pagination.total} transactions
+                  </div>
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
