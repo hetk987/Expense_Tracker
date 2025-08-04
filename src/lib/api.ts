@@ -91,6 +91,40 @@ export const plaidApi = {
         return response.data;
     },
 
+    // Get unified dashboard data (transactions, stats, categories, accounts)
+    getDashboardData: async (filters: TransactionFilters = {}): Promise<{
+        transactions: any[];
+        stats: {
+            totalCount: number;
+            totalSpending: number;
+            averageAmount: number;
+            largestAmount: number;
+        };
+        categories: CategoryStats[];
+        accounts: PlaidAccount[];
+        pagination: {
+            total: number;
+            limit: number;
+            offset: number;
+        };
+    }> => {
+        const params = new URLSearchParams();
+
+        if (filters.accountId) params.append('accountId', filters.accountId);
+        if (filters.startDate) params.append('startDate', filters.startDate);
+        if (filters.endDate) params.append('endDate', filters.endDate);
+        if (filters.limit) params.append('limit', filters.limit.toString());
+        if (filters.offset) params.append('offset', filters.offset.toString());
+        if (filters.category) params.append('category', filters.category);
+        if (filters.search) params.append('search', filters.search);
+        if (filters.status) params.append('status', filters.status);
+        if (filters.sortBy) params.append('sortBy', filters.sortBy);
+        if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+
+        const response = await api.get(`/api/plaid/transactions/dashboard?${params.toString()}`);
+        return response.data;
+    },
+
     // Manually trigger transaction sync
     syncTransactions: async (): Promise<{ message: string }> => {
         const response = await api.post<{ message: string }>('/api/plaid/sync');

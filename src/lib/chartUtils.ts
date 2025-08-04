@@ -12,56 +12,22 @@ export function getCreditCardPayments(transactions: PlaidTransaction[]): PlaidTr
  * Enhanced function to identify credit card payments with more comprehensive patterns
  */
 export function isCreditCardPayment(transaction: PlaidTransaction): boolean {
-    // Credit card payments are typically positive amounts (reduce the balance)
-    if (transaction.amount > 0) {
-        const name = transaction.name.toLowerCase()
-        const merchantName = transaction.merchantName?.toLowerCase() || ''
+    // Simple and precise filtering: only filter out specific credit card payment patterns
+    const name = transaction.name.toUpperCase();
+    const merchantName = transaction.merchantName;
+    const category = transaction.category?.toUpperCase();
 
-        // Common patterns for credit card payments
-        const paymentPatterns = [
-            'payment',
-            'credit card payment',
-            'card payment',
-            'online payment',
-            'electronic payment',
-            'ach payment',
-            'bank transfer',
-            'transfer',
-            'payment thank you',
-            'payment received',
-            'credit card',
-            'cc payment',
-            'card',
-            'online transfer',
-            'electronic transfer',
-            'bill pay',
-            'bill payment',
-            'autopay',
-            'auto payment',
-            'recurring payment',
-            'monthly payment',
-            'statement credit',
-            'credit',
-            'refund',
-            'return',
-            'adjustment',
-            'fee reversal',
-            'interest charge reversal'
-        ]
-
-        // Check if transaction name contains payment-related keywords
-        const isPaymentPattern = paymentPatterns.some(pattern =>
-            name.includes(pattern) || merchantName.includes(pattern)
-        )
-
-        // Additional check: if the transaction name is very short and contains numbers, it might be a payment
-        const isShortNumericName = name.length <= 20 && /\d/.test(name) &&
-            (name.includes('payment') || name.includes('transfer') || name.includes('credit'))
-
-        return isPaymentPattern || isShortNumericName
+    // Filter out transactions that match the specific pattern:
+    // 1. Name contains "INTERNET PAYMENT - THANK YOU"
+    // 2. No merchant name (null, undefined, or empty string)
+    // 3. Category is "LOAN_PAYMENT"
+    if (name.includes('INTERNET PAYMENT - THANK YOU') &&
+        (!merchantName || merchantName.trim() === '') &&
+        category === 'LOAN_PAYMENT') {
+        return true;
     }
 
-    return false
+    return false;
 }
 
 /**
@@ -69,6 +35,32 @@ export function isCreditCardPayment(transaction: PlaidTransaction): boolean {
  */
 export function filterOutCreditCardPayments(transactions: PlaidTransaction[]): PlaidTransaction[] {
     return transactions.filter(transaction => !isCreditCardPayment(transaction))
+}
+
+/**
+ * Filters out credit card payments from partial transaction objects (for backend use)
+ */
+export function filterOutCreditCardPaymentsPartial<T extends { amount: number; name: string; merchantName?: string | null; category?: string }>(
+    transactions: T[]
+): T[] {
+    return transactions.filter((transaction) => {
+        // Use the same simplified logic as isCreditCardPayment
+        const name = transaction.name.toUpperCase();
+        const merchantName = transaction.merchantName;
+        const category = transaction.category?.toUpperCase();
+
+        // Filter out transactions that match the specific pattern:
+        // 1. Name contains "INTERNET PAYMENT - THANK YOU"
+        // 2. No merchant name (null, undefined, or empty string)
+        // 3. Category is "LOAN_PAYMENT"
+        if (name.includes('INTERNET PAYMENT - THANK YOU') &&
+            (!merchantName || merchantName.trim() === '') &&
+            category === 'LOAN_PAYMENT') {
+            return false; // Filter out this transaction
+        }
+
+        return true; // Keep this transaction
+    });
 }
 
 export function processCategoryData(transactions: PlaidTransaction[]): CategoryData[] {

@@ -65,4 +65,11 @@ export function getLast30DaysRange() {
         startDate: thirtyDaysAgo.toISOString().split('T')[0],
         endDate: now.toISOString().split('T')[0],
     };
+}
+
+/**
+ * Simple utility to convert Prisma transactions with Decimal amounts to number amounts
+ */
+export function convertPrismaTransactions<T extends { amount: any }>(transactions: T[]): (T & { amount: number })[] {
+    return transactions.map(t => ({ ...t, amount: Number(t.amount) }));
 } 

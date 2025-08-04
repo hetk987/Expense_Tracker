@@ -1,3 +1,5 @@
+import { Decimal } from "@prisma/client/runtime/library";
+
 export interface PlaidAccount {
     id: string;
     plaidAccountId: string;

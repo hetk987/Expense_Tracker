@@ -152,29 +152,15 @@ export default function TransactionsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [transactionsData, accountsData, statsData, categoryData] =
-        await Promise.all([
-          plaidApi.getTransactions(filters),
-          plaidApi.getAccounts(),
-          plaidApi.getTransactionStats(filters),
-          plaidApi.getCategories(),
-        ]);
-      console.log("transactionsData");
-      console.log(transactionsData);
-      setTransactions(transactionsData.transactions);
-      setPagination({
-        total: transactionsData.total,
-        limit: filters.limit || 50,
-        offset: filters.offset || 0,
-      });
-      setAccounts(accountsData);
-      setTransactionStats(statsData);
+      const dashboardData = await plaidApi.getDashboardData(filters);
 
-      console.log("categoryData");
-      console.log(categoryData);
-      setAvailableCategories(categoryData);
+      setTransactions(dashboardData.transactions);
+      setTransactionStats(dashboardData.stats);
+      setAvailableCategories(dashboardData.categories);
+      setAccounts(dashboardData.accounts);
+      setPagination(dashboardData.pagination);
     } catch (error) {
-      console.error("Error loading transactions:", error);
+      console.error("Error loading dashboard data:", error);
     } finally {
       setLoading(false);
     }

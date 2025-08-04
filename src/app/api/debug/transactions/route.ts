@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prismaClient';
 import { debugProtected, logDebugAccess } from '@/lib/debugAuth';
 import { filterOutCreditCardPayments, getCreditCardPayments } from '@/lib/chartUtils';
+import { convertPrismaTransactions } from '@/lib/utils';
 
 async function getTransactionsHandler(request: NextRequest) {
     try {
@@ -98,13 +99,16 @@ async function getTransactionsHandler(request: NextRequest) {
             take: 10,
         });
 
+        // Convert Prisma transactions to have number amounts
+        const transactionsWithNumbers = convertPrismaTransactions(transactions);
+
         // Filter out credit card payments for spending calculations
-        const filteredTransactions = filterOutCreditCardPayments(transactions);
-        const creditCardPayments = getCreditCardPayments(transactions);
+        const filteredTransactions = filterOutCreditCardPayments(transactionsWithNumbers as any);
+        const creditCardPayments = getCreditCardPayments(transactionsWithNumbers as any);
 
         // Calculate spending statistics excluding credit card payments
         const spendingTransactions = filteredTransactions.filter(t => t.amount < 0);
-        const totalSpending = spendingTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+        const totalSpending = spendingTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
         const averageSpending = spendingTransactions.length > 0 ? totalSpending / spendingTransactions.length : 0;
 
         return NextResponse.json({
@@ -121,7 +125,7 @@ async function getTransactionsHandler(request: NextRequest) {
                 count: stat._count.id,
                 totalAmount: Math.abs(Number(stat._sum.amount || 0)),
             })),
-            transactions: showCreditCardPayments ? transactions : filteredTransactions,
+            transactions: showCreditCardPayments ? transactionsWithNumbers : filteredTransactions,
             creditCardPayments: showCreditCardPayments ? creditCardPayments : undefined,
             filters: {
                 accountId,

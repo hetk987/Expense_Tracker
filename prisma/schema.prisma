@@ -55,9 +55,18 @@ model PlaidTransaction {
   // Relations
   account PlaidAccount @relation(fields: [accountId], references: [id])
 
+  // Basic indexes
   @@index([accountId])
   @@index([date])
   @@index([pending])
+  
+  // Composite indexes for common query patterns
+  @@index([accountId, date])
+  @@index([category, amount])
+  @@index([accountId, category])
+  @@index([date, pending])
+  @@index([name])
+  @@index([merchantName])
 }
 
 model PlaidLinkToken {

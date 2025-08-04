@@ -2,6 +2,8 @@ import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } fro
 import { prisma } from './prismaClient';
 import { getCurrentYearRange } from './utils';
 import { Decimal } from '@prisma/client/runtime/library';
+import { TRANSACTION_LIMITS, PAGINATION } from './constants';
+import { filterOutCreditCardPaymentsPartial } from './chartUtils';
 
 const configuration = new Configuration({
     basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments || 'sandbox'],
@@ -273,8 +275,8 @@ export class PlaidService {
                     account: true,
                 },
                 orderBy,
-                take: filters.limit || 100,
-                skip: filters.offset || 0,
+                take: filters.limit || TRANSACTION_LIMITS.DASHBOARD,
+                skip: filters.offset || PAGINATION.DEFAULT_OFFSET,
             });
 
             const total = await prisma.plaidTransaction.count({ where });
@@ -282,7 +284,7 @@ export class PlaidService {
             return {
                 transactions,
                 total,
-                hasMore: (filters.offset || 0) + (filters.limit || 100) < total,
+                hasMore: (filters.offset || PAGINATION.DEFAULT_OFFSET) + (filters.limit || TRANSACTION_LIMITS.DASHBOARD) < total,
             };
         } catch (error) {
             console.error('Error getting transactions:', error);
@@ -346,21 +348,22 @@ export class PlaidService {
             }
 
             // Get all transactions to filter out credit card payments
-            const allTransactions = await prisma.plaidTransaction.findMany({
+            const allTransactionsRaw = await prisma.plaidTransaction.findMany({
                 where,
                 select: {
                     id: true,
                     amount: true,
                     name: true,
                     merchantName: true,
+                    category: true,
                 },
             });
-
-            // Import the filtering function
-            const { filterOutCreditCardPayments } = await import('./chartUtils');
-
-            // Filter out credit card payments
-            const filteredTransactions = filterOutCreditCardPayments(allTransactions);
+            const allTransactions = allTransactionsRaw.map(t => ({
+                ...t,
+                amount: Number(t.amount),
+            }));
+            // Filter out credit card payments (partial)
+            const filteredTransactions = filterOutCreditCardPaymentsPartial(allTransactions);
 
             // Calculate statistics on filtered transactions
             const totalCount = filteredTransactions.length;
@@ -389,6 +392,132 @@ export class PlaidService {
     }
 
     /**
+     * Gets transactions with aggregated stats in a single optimized query
+     * Excludes credit card payments at database level
+     */
+    static async getTransactionsWithStats(filters: TransactionFilters = {}) {
+        try {
+            const where = this.buildWhereClause(filters);
+
+            // Single query to get transactions with aggregated stats
+            const [transactions, stats] = await Promise.all([
+                prisma.plaidTransaction.findMany({
+                    where: {
+                        ...where,
+                        // Exclude credit card payments at database level
+                        NOT: {
+                            AND: [
+                                { name: { contains: 'INTERNET PAYMENT - THANK YOU', mode: 'insensitive' } },
+                                { merchantName: null },
+                                { category: 'LOAN_PAYMENTS' }
+                            ]
+                        }
+                    },
+                    include: { account: true },
+                    orderBy: this.buildOrderBy(filters),
+                    take: filters.limit || TRANSACTION_LIMITS.DASHBOARD,
+                    skip: filters.offset || PAGINATION.DEFAULT_OFFSET,
+                }),
+
+                // Get stats in a single aggregation query
+                prisma.plaidTransaction.aggregate({
+                    where: {
+                        ...where,
+                        amount: { lt: 0 }, // Only expenses
+                        NOT: {
+                            AND: [
+                                { name: { contains: 'INTERNET PAYMENT - THANK YOU', mode: 'insensitive' } },
+                                { merchantName: null },
+                                { category: 'LOAN_PAYMENT' }
+                            ]
+                        }
+                    },
+                    _count: true,
+                    _sum: { amount: true },
+                    _avg: { amount: true },
+                    _max: { amount: true }
+                })
+            ]);
+
+            return {
+                transactions,
+                stats: {
+                    totalCount: stats._count,
+                    totalSpending: Math.abs(Number(stats._sum.amount || 0)),
+                    averageAmount: Math.abs(Number(stats._avg.amount || 0)),
+                    largestAmount: Math.abs(Number(stats._max.amount || 0))
+                }
+            };
+        } catch (error) {
+            console.error('Error getting transactions with stats:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Builds where clause for database queries
+     */
+    private static buildWhereClause(filters: TransactionFilters) {
+        const where: any = {};
+
+        if (filters.accountId) {
+            where.accountId = filters.accountId;
+        }
+
+        if (filters.startDate) {
+            where.date = { ...where.date, gte: new Date(filters.startDate) };
+        }
+
+        if (filters.endDate) {
+            where.date = { ...where.date, lte: new Date(filters.endDate) };
+        }
+
+        if (filters.category && filters.category !== 'all') {
+            where.category = filters.category;
+        }
+
+        if (filters.search) {
+            where.OR = [
+                { name: { contains: filters.search, mode: 'insensitive' } },
+                { merchantName: { contains: filters.search, mode: 'insensitive' } }
+            ];
+        }
+
+        if (filters.status && filters.status !== 'all') {
+            where.pending = filters.status === 'pending';
+        }
+
+        return where;
+    }
+
+    /**
+     * Builds order by clause for database queries
+     */
+    private static buildOrderBy(filters: TransactionFilters) {
+        let orderBy: any = {};
+
+        if (filters.sortBy) {
+            switch (filters.sortBy) {
+                case 'date':
+                    orderBy.date = filters.sortOrder || 'desc';
+                    break;
+                case 'amount':
+                    orderBy.amount = filters.sortOrder || 'desc';
+                    break;
+                case 'name':
+                    orderBy.name = filters.sortOrder || 'asc';
+                    break;
+                default:
+                    orderBy.date = 'desc';
+            }
+        } else {
+            orderBy.date = 'desc';
+        }
+
+        return orderBy;
+    }
+
+    /**
      * Gets all unique categories from transactions with optional filtering
      * Excludes credit card payments from spending calculations
      */
@@ -413,7 +542,7 @@ export class PlaidService {
             }
 
             // Get all transactions to filter out credit card payments
-            const allTransactions = await prisma.plaidTransaction.findMany({
+            const allCategoryTransactionsRaw = await prisma.plaidTransaction.findMany({
                 where: whereClause,
                 select: {
                     id: true,
@@ -423,12 +552,12 @@ export class PlaidService {
                     category: true,
                 },
             });
-
-            // Import the filtering function
-            const { filterOutCreditCardPayments } = await import('./chartUtils');
-
-            // Filter out credit card payments
-            const filteredTransactions = filterOutCreditCardPayments(allTransactions);
+            const allCategoryTransactions = allCategoryTransactionsRaw.map(t => ({
+                ...t,
+                amount: Number(t.amount),
+            }));
+            // Filter out credit card payments (partial)
+            const filteredTransactions = filterOutCreditCardPaymentsPartial(allCategoryTransactions);
 
             // Group by category and calculate statistics
             const categoryMap = new Map<string, { count: number; totalAmount: number }>();
