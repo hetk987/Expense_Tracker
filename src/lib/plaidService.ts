@@ -682,7 +682,7 @@ export class PlaidService {
             const categoryMap = new Map<string, { count: number; totalAmount: number }>();
 
             filteredTransactions.forEach(transaction => {
-                if (transaction.amount < 0) { // Only count expenses
+                if (transaction.amount > 0) { // Only count expenses
                     const category = transaction.category || 'Uncategorized';
                     const current = categoryMap.get(category) || { count: 0, totalAmount: 0 };
 
