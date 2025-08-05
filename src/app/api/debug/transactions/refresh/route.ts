@@ -97,22 +97,20 @@ async function refreshTransactionsHandler(request: NextRequest) {
 
                 const plaidClient = new PlaidApi(configuration);
 
-                console.log(`Making Plaid API request for account ${account.name}:`, {
+                console.log(`Making paginated Plaid API requests for account ${account.name}:`, {
                     start_date: startDate,
                     end_date: endDate,
                     access_token_length: account.accessToken.length,
                 });
 
-                const response = await plaidClient.transactionsGet({
-                    access_token: account.accessToken,
-                    start_date: startDate,
-                    end_date: endDate,
-                    options: {
-                        include_personal_finance_category: true,
-                    },
-                });
+                // Use the new pagination method to fetch all transactions
+                const transactions = await PlaidService.fetchAllTransactions(
+                    account.accessToken,
+                    startDate,
+                    endDate,
+                    [account.plaidAccountId] // Pass the specific account ID
+                );
 
-                const transactions = response.data.transactions;
                 console.log(`Fetched ${transactions.length} transactions from Plaid for account ${account.name}`);
 
                 // Save transactions to database
@@ -129,6 +127,7 @@ async function refreshTransactionsHandler(request: NextRequest) {
                                 name: transaction.name,
                                 merchantName: transaction.merchant_name,
                                 category: transaction.personal_finance_category?.primary || "Uncategorized",
+                                categoryIcon: transaction.personal_finance_category_icon_url || "Uncategorized",
                                 pending: transaction.pending,
                                 paymentChannel: transaction.payment_channel,
                                 transactionType: transaction.payment_channel,

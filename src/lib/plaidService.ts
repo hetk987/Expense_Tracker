@@ -364,17 +364,18 @@ export class PlaidService {
             }));
             // Filter out credit card payments (partial)
             const filteredTransactions = filterOutCreditCardPaymentsPartial(allTransactions);
-
+            console.log(filteredTransactions);
             // Calculate statistics on filtered transactions
             const totalCount = filteredTransactions.length;
+
             const totalSpending = filteredTransactions
-                .filter(t => t.amount < 0) // Only count expenses (negative amounts)
+                .filter(t => t.amount > 0) // Only count expenses (positive amounts)
                 .reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
             const averageAmount = totalCount > 0 ? totalSpending / totalCount : 0;
 
             // Get largest expense transaction
             const largestTransaction = filteredTransactions
-                .filter(t => t.amount < 0) // Only expenses
+                .filter(t => t.amount > 0) // Only expenses
                 .sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)))[0];
 
             const largestAmount = largestTransaction ? Math.abs(Number(largestTransaction.amount)) : 0;
@@ -423,7 +424,7 @@ export class PlaidService {
                 prisma.plaidTransaction.aggregate({
                     where: {
                         ...where,
-                        amount: { lt: 0 }, // Only expenses
+                        amount: { gt: 0 }, // Only expenses
                         NOT: {
                             AND: [
                                 { name: { contains: 'INTERNET PAYMENT - THANK YOU', mode: 'insensitive' } },
@@ -439,6 +440,9 @@ export class PlaidService {
                 })
             ]);
 
+            console.log('getTransactionsWithStats - stats:', stats);
+            console.log('getTransactionsWithStats - transactions count:', transactions.length);
+
             return {
                 transactions,
                 stats: {
@@ -452,6 +456,121 @@ export class PlaidService {
             console.error('Error getting transactions with stats:', error);
             throw error;
         }
+    }
+
+    /**
+     * Fetches all transactions from Plaid with proper pagination handling
+     * This method handles the 100 transaction limit by making multiple API calls
+     * 
+     * @param accessToken - Plaid access token for the account
+     * @param startDate - Start date in YYYY-MM-DD format
+     * @param endDate - End date in YYYY-MM-DD format
+     * @param accountIds - Optional array of specific account IDs to fetch
+     * @returns Promise<Array> - Array of all transactions
+     */
+    static async fetchAllTransactions(
+        accessToken: string,
+        startDate: string,
+        endDate: string,
+        accountIds?: string[]
+    ): Promise<any[]> {
+        const allTransactions: any[] = [];
+        let offset = 0;
+        const count = 500; // Use maximum count to minimize API calls
+        let hasMore = true;
+        let retryCount = 0;
+        const maxRetries = 2;
+        let totalExpected = 0;
+        let batchCount = 0;
+
+        console.log(`Starting paginated transaction fetch for date range: ${startDate} to ${endDate}`);
+        if (accountIds && accountIds.length > 0) {
+            console.log(`Fetching for specific accounts: ${accountIds.join(', ')}`);
+        }
+
+        while (hasMore && retryCount < maxRetries) {
+            try {
+                batchCount++;
+                console.log(`Fetching transactions batch #${batchCount}: offset=${offset}, count=${count}`);
+
+                const response = await plaidClient.transactionsGet({
+                    access_token: accessToken,
+                    start_date: startDate,
+                    end_date: endDate,
+                    options: {
+                        include_personal_finance_category: true,
+                        account_ids: accountIds,
+                        count,
+                        offset,
+                    },
+                });
+
+                const transactions = response.data.transactions;
+                const totalTransactions = response.data.total_transactions;
+
+                // Set total expected on first batch
+                if (batchCount === 1) {
+                    totalExpected = totalTransactions;
+                    console.log(`Total transactions available: ${totalExpected}`);
+                }
+
+                console.log(`Received ${transactions.length} transactions (total: ${totalTransactions}, offset: ${offset}, progress: ${allTransactions.length + transactions.length}/${totalExpected})`);
+
+                // Add transactions to our collection
+                allTransactions.push(...transactions);
+
+                // Check if we've received all transactions
+                if (transactions.length === 0 || allTransactions.length >= totalTransactions) {
+                    hasMore = false;
+                    console.log(`Completed transaction fetch. Total fetched: ${allTransactions.length}/${totalExpected} in ${batchCount} batches`);
+                } else {
+                    // Move to next batch
+                    offset += count;
+
+                    // Safety check to prevent infinite loops
+                    if (offset > 10000) {
+                        console.warn('Reached maximum offset limit (10,000), stopping pagination');
+                        hasMore = false;
+                    }
+                }
+
+                // Reset retry count on successful request
+                retryCount = 0;
+
+                // Add a small delay to be respectful to Plaid's API
+                if (hasMore) {
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+
+            } catch (error) {
+                retryCount++;
+                console.error(`Error fetching transactions batch #${batchCount} (attempt ${retryCount}/${maxRetries}):`, error);
+
+                // Enhanced error logging for Plaid API errors
+                if (error && typeof error === 'object' && 'response' in error) {
+                    const plaidError = error as any;
+                    console.error('Plaid API Error Details:', {
+                        status: plaidError.response?.status,
+                        statusText: plaidError.response?.statusText,
+                        data: plaidError.response?.data,
+                        headers: plaidError.response?.headers,
+                    });
+                }
+
+                if (retryCount >= maxRetries) {
+                    console.error('Max retries reached, stopping pagination');
+                    throw new Error(`Failed to fetch transactions after ${maxRetries} attempts: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+
+                // Wait before retrying (exponential backoff)
+                const delay = Math.min(1000 * Math.pow(2, retryCount - 1), 5000);
+                console.log(`Retrying in ${delay}ms...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+
+        console.log(`Successfully fetched ${allTransactions.length} total transactions in ${batchCount} batches`);
+        return allTransactions;
     }
 
     /**
@@ -633,17 +752,13 @@ export class PlaidService {
 
             const endDate = new Date().toISOString().split('T')[0];
 
-            // Fetch transactions from Plaid
-            const response = await plaidClient.transactionsGet({
-                access_token: account.accessToken,
-                start_date: startDate,
-                end_date: endDate,
-                options: {
-                    include_personal_finance_category: true,
-                },
-            });
-
-            const transactions = response.data.transactions;
+            // Fetch all transactions from Plaid using pagination
+            const transactions = await this.fetchAllTransactions(
+                account.accessToken,
+                startDate,
+                endDate,
+                [account.plaidAccountId]
+            );
 
             // Save new transactions to database
             for (const transaction of transactions) {

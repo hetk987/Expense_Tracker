@@ -52,10 +52,10 @@ export function filterOutCreditCardPaymentsPartial<T extends { amount: number; n
         // Filter out transactions that match the specific pattern:
         // 1. Name contains "INTERNET PAYMENT - THANK YOU"
         // 2. No merchant name (null, undefined, or empty string)
-        // 3. Category is "LOAN_PAYMENT"
+        // 3. Category is "LOAN_PAYMENTS"
         if (name.includes('INTERNET PAYMENT - THANK YOU') &&
             (!merchantName || merchantName.trim() === '') &&
-            category === 'LOAN_PAYMENT') {
+            category === 'LOAN_PAYMENTS') {
             return false; // Filter out this transaction
         }
 
@@ -72,7 +72,8 @@ export function processCategoryData(transactions: PlaidTransaction[]): CategoryD
     // Process transactions
     filteredTransactions.forEach(transaction => {
         if (transaction.amount < 0) { // Only process expenses (negative amounts)
-            const category = transaction.category?.[0] || 'Uncategorized'
+            // Fix: Use full category name, not just first character
+            const category = transaction.category || 'Uncategorized'
             const current = categoryMap.get(category) || { amount: 0, count: 0 }
 
             categoryMap.set(category, {
