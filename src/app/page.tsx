@@ -25,6 +25,12 @@ import {
   PieChart,
   TrendingUp,
   Activity,
+  ArrowRight,
+  Sparkles,
+  Target,
+  Clock,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import { plaidApi } from "@/lib/api";
 import { PlaidAccount, PlaidTransaction } from "@/types";
@@ -43,6 +49,9 @@ import {
 } from "@/lib/chartUtils";
 import CategoryBarChart from "@/components/charts/CategoryBarChart";
 import AuthWrapper from "@/components/AuthWrapper";
+import PageHeader from "@/components/ui/page-header";
+import { DashboardSkeleton } from "@/components/ui/skeleton";
+import EmptyState from "@/components/ui/empty-state";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -137,360 +146,420 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary-600"></div>
-      </div>
+      <AuthWrapper>
+        <div className="container mx-auto px-6 py-8">
+          <DashboardSkeleton />
+        </div>
+      </AuthWrapper>
     );
   }
 
   return (
     <AuthWrapper>
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-              Credit Card Dashboard
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Track your credit card spending and expenses
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <Button
-              onClick={handleSyncTransactions}
-              disabled={syncing}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <RefreshCw
-                className={`h-4 w-4 ${syncing ? "animate-spin" : ""}`}
-              />
-              {syncing ? "Syncing..." : "Sync Transactions"}
-            </Button>
-            <Button asChild>
-              <Link href="/link-account" className="flex items-center gap-2">
-                <Plus className="h-4 w-4" />
-                Link Account
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        {/* Category Filter */}
-        <div className="mb-6">
-          <div className="flex flex-wrap gap-2">
-            {categories.map((category) => (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        {/* Enhanced Header */}
+        <PageHeader
+          title="Financial Dashboard"
+          description="Track your spending, monitor trends, and stay on top of your finances"
+          actions={
+            <>
               <Button
-                key={String(category)}
-                variant={selectedCategory === category ? "default" : "outline"}
-                size="sm"
-                onClick={() => setSelectedCategory(String(category))}
-                className="text-sm"
+                variant="outline"
+                size="lg"
+                onClick={handleSyncTransactions}
+                disabled={syncing}
+                className="gap-2"
               >
-                {category === "all" ? "All Categories" : String(category)}
+                <RefreshCw
+                  className={`h-5 w-5 ${syncing ? "animate-spin" : ""}`}
+                />
+                {syncing ? "Syncing..." : "Sync"}
               </Button>
-            ))}
-          </div>
-        </div>
+              <Button size="lg" asChild className="gap-2">
+                <Link href="/link-account">
+                  <Plus className="h-5 w-5" />
+                  Add Account
+                </Link>
+              </Button>
+            </>
+          }
+        />
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Total Spending
-              </CardTitle>
-              <DollarSign className="h-4 w-4 text-primary-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {formatCurrency(totalSpending)}
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Across {filteredTransactions.length} transactions
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Average Transaction
-              </CardTitle>
-              <TrendingUp className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {formatCurrency(averageTransaction)}
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Per transaction
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Largest Transaction
-              </CardTitle>
-              <Activity className="h-4 w-4 text-orange-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {formatCurrency(largestTransaction)}
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Highest single charge
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                Linked Cards
-              </CardTitle>
-              <CreditCard className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-900 dark:text-white">
-                {accounts.length}
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">
-                Connected accounts
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          {/* Category Spending Chart */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-                Spending by Category
-              </h2>
-              <div className="flex gap-2">
+        <div className="container mx-auto px-6 py-8">
+          {/* Smart Category Filter */}
+          {categories.length > 1 && (
+            <div className="mb-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Filter by Category
+                </h2>
                 <Button
-                  variant={chartView === "pie" ? "default" : "outline"}
+                  variant="ghost"
                   size="sm"
-                  onClick={() => setChartView("pie")}
-                  className="flex items-center gap-1"
+                  onClick={() => setSelectedCategory("all")}
+                  className={
+                    selectedCategory === "all"
+                      ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+                      : ""
+                  }
                 >
-                  <PieChart className="h-4 w-4" />
-                  Pie
-                </Button>
-                <Button
-                  variant={chartView === "bar" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setChartView("bar")}
-                  className="flex items-center gap-1"
-                >
-                  <BarChart3 className="h-4 w-4" />
-                  Bar
+                  View All
                 </Button>
               </div>
-            </div>
-
-            {chartView === "pie" ? (
-              <CategoryPieChart data={topCategories} title="" />
-            ) : (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Top Spending Categories
-                </h3>
-                <div className="space-y-4">
-                  {topCategories.map((category, index) => (
-                    <div
-                      key={category.category}
-                      className="flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div
-                          className="w-4 h-4 rounded-full"
-                          style={{
-                            backgroundColor: [
-                              "#3B82F6",
-                              "#EF4444",
-                              "#10B981",
-                              "#F59E0B",
-                              "#8B5CF6",
-                            ][index],
-                          }}
-                        />
-                        <span className="font-medium">{category.category}</span>
-                      </div>
-                      <div className="text-right">
-                        <div className="font-semibold">
-                          {formatCurrency(category.amount)}
-                        </div>
-                        <div className="text-sm text-gray-500">
-                          {category.percentage.toFixed(1)}%
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Spending Over Time Chart */}
-          <div>
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-              Spending Over Time
-            </h2>
-            <SpendingLineChart data={timeSeriesData} title="" />
-          </div>
-        </div>
-
-        {/* Accounts and Recent Transactions */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Linked Accounts */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <CreditCard className="h-5 w-5" />
-                    Linked Credit Cards
-                  </CardTitle>
-                  <CardDescription>
-                    Your connected credit card accounts
-                  </CardDescription>
-                </div>
-                {accounts.length > 0 && (
-                  <Button variant="outline" size="sm" asChild>
-                    <Link href="/accounts">Manage Accounts</Link>
+              <div className="flex flex-wrap gap-3">
+                {categories.slice(0, 8).map((category) => (
+                  <Button
+                    key={String(category)}
+                    variant={
+                      selectedCategory === category ? "default" : "outline"
+                    }
+                    size="sm"
+                    onClick={() => setSelectedCategory(String(category))}
+                    className={`rounded-full px-4 py-2 transition-all duration-200 ${
+                      selectedCategory === category
+                        ? "bg-primary-600 text-white shadow-lg"
+                        : "hover:bg-gray-50 dark:hover:bg-gray-800"
+                    }`}
+                  >
+                    {category === "all" ? "All Categories" : String(category)}
+                  </Button>
+                ))}
+                {categories.length > 8 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-primary-600"
+                  >
+                    +{categories.length - 8} more
                   </Button>
                 )}
               </div>
-            </CardHeader>
-            <CardContent>
-              {accounts.length === 0 ? (
-                <div className="text-center py-8">
-                  <CreditCard className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 mb-4">
-                    No credit cards linked yet
-                  </p>
-                  <Button asChild>
-                    <Link href="/link-account">Link Your First Card</Link>
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {accounts.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-primary-100 rounded-full flex items-center justify-center">
-                          <CreditCard className="h-5 w-5 text-primary-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{account.name}</p>
-                          <p className="text-sm text-gray-600">
-                            {account.type} • {account.subtype}
-                          </p>
-                        </div>
-                      </div>
-                      <Badge variant="secondary">
-                        {account.mask ? `****${account.mask}` : "Active"}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          )}
 
-          {/* Recent Transactions */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Recent Transactions
-              </CardTitle>
-              <CardDescription>
-                Your latest credit card activity
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {filteredTransactions.length === 0 ? (
-                <div className="text-center py-8">
-                  <Calendar className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-600 mb-4">No transactions yet</p>
-                  <Button asChild>
-                    <Link href="/transactions">View All Transactions</Link>
-                  </Button>
+          {/* Enhanced Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card className="group hover:shadow-apple-lg transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                    Total Spending
+                  </CardTitle>
+                  <div className="w-10 h-10 bg-blue-500/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <DollarSign className="h-5 w-5 text-blue-600" />
+                  </div>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {filteredTransactions.slice(0, 5).map((transaction) => (
-                    <div
-                      key={transaction.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-blue-900 dark:text-blue-100">
+                  {formatCurrency(totalSpending)}
+                </div>
+                <p className="text-sm text-blue-600 dark:text-blue-300 mt-1">
+                  Across {filteredTransactions.length} transactions
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="group hover:shadow-apple-lg transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-green-700 dark:text-green-300">
+                    Average Transaction
+                  </CardTitle>
+                  <div className="w-10 h-10 bg-green-500/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <TrendingUp className="h-5 w-5 text-green-600" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-green-900 dark:text-green-100">
+                  {formatCurrency(averageTransaction)}
+                </div>
+                <p className="text-sm text-green-600 dark:text-green-300 mt-1">
+                  Per transaction
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="group hover:shadow-apple-lg transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-purple-800/20">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-purple-700 dark:text-purple-300">
+                    Largest Transaction
+                  </CardTitle>
+                  <div className="w-10 h-10 bg-purple-500/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Activity className="h-5 w-5 text-purple-600" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-purple-900 dark:text-purple-100">
+                  {formatCurrency(largestTransaction)}
+                </div>
+                <p className="text-sm text-purple-600 dark:text-purple-300 mt-1">
+                  Highest single charge
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card className="group hover:shadow-apple-lg transition-all duration-300 hover:-translate-y-1 border-0 bg-gradient-to-br from-orange-50 to-orange-100 dark:from-orange-900/20 dark:to-orange-800/20">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-medium text-orange-700 dark:text-orange-300">
+                    Linked Cards
+                  </CardTitle>
+                  <div className="w-10 h-10 bg-orange-500/10 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <CreditCard className="h-5 w-5 text-orange-600" />
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold text-orange-900 dark:text-orange-100">
+                  {accounts.length}
+                </div>
+                <p className="text-sm text-orange-600 dark:text-orange-300 mt-1">
+                  Connected accounts
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Enhanced Charts Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            {/* Category Spending Chart */}
+            <Card className="border-0 shadow-apple-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-xl font-semibold text-gray-900 dark:text-white">
+                      Spending by Category
+                    </CardTitle>
+                    <CardDescription className="text-gray-600 dark:text-gray-400">
+                      Visual breakdown of your expenses
+                    </CardDescription>
+                  </div>
+                  <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 rounded-xl p-1">
+                    <Button
+                      variant={chartView === "pie" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setChartView("pie")}
+                      className="rounded-lg"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center">
-                          <DollarSign className="h-5 w-5 text-gray-600" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{transaction.name}</p>
-                          <p className="text-sm text-gray-600">
-                            {formatDate(transaction.date)}
-                          </p>
-                          {transaction.category &&
-                            transaction.category.length > 0 && (
-                              <p className="text-xs text-gray-500">
-                                {transaction.category[0]}
-                              </p>
-                            )}
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium text-red-600">
-                          {formatCurrency(Math.abs(transaction.amount))}
-                        </p>
-                        {transaction.pending && (
-                          <Badge variant="outline" className="text-xs">
-                            Pending
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                  <div className="pt-4">
-                    <Button asChild variant="outline" className="w-full">
-                      <Link href="/transactions">View All Transactions</Link>
+                      <PieChart className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant={chartView === "bar" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setChartView("bar")}
+                      className="rounded-lg"
+                    >
+                      <BarChart3 className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
-              )}
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  {chartView === "pie" ? (
+                    <CategoryPieChart data={topCategories} title="" />
+                  ) : (
+                    <CategoryBarChart data={topCategories} title="" />
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Spending Over Time Chart */}
+            <Card className="border-0 shadow-apple-lg bg-gradient-to-br from-white to-gray-50 dark:from-gray-800 dark:to-gray-900">
+              <CardHeader>
+                <CardTitle className="text-xl font-semibold text-gray-900 dark:text-white">
+                  Spending Over Time
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-gray-400">
+                  Track your spending trends and patterns
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="h-80">
+                  <SpendingLineChart data={timeSeriesData} title="" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Accounts and Recent Transactions */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Linked Accounts */}
+            <Card className="border-0 shadow-apple-lg">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+                      <CreditCard className="h-5 w-5" />
+                      Linked Credit Cards
+                    </CardTitle>
+                    <CardDescription className="text-gray-600 dark:text-gray-400">
+                      Your connected credit card accounts
+                    </CardDescription>
+                  </div>
+                  {accounts.length > 0 && (
+                    <Button variant="outline" size="sm" asChild>
+                      <Link href="/accounts" className="gap-2">
+                        Manage
+                        <ArrowRight className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                {accounts.length === 0 ? (
+                  <EmptyState
+                    icon={CreditCard}
+                    title="No credit cards linked"
+                    description="Link your first credit card to start tracking expenses and get insights into your spending patterns."
+                    action={{
+                      label: "Link Your First Card",
+                      href: "/link-account",
+                    }}
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    {accounts.map((account) => (
+                      <div
+                        key={account.id}
+                        className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-primary-100 to-primary-200 rounded-xl flex items-center justify-center">
+                            <CreditCard className="h-5 w-5 text-primary-600" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {account.name}
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {account.type} • {account.subtype}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge
+                          variant="secondary"
+                          className="bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-300"
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Active
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Recent Transactions */}
+            <Card className="border-0 shadow-apple-lg">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
+                  <Calendar className="h-5 w-5" />
+                  Recent Transactions
+                </CardTitle>
+                <CardDescription className="text-gray-600 dark:text-gray-400">
+                  Your latest credit card activity
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {filteredTransactions.length === 0 ? (
+                  <EmptyState
+                    icon={Calendar}
+                    title="No transactions yet"
+                    description="Sync your accounts to see your recent transactions and spending activity."
+                    action={{
+                      label: "Sync Transactions",
+                      onClick: handleSyncTransactions,
+                    }}
+                    secondaryAction={{
+                      label: "View All",
+                      href: "/transactions",
+                    }}
+                  />
+                ) : (
+                  <div className="space-y-4">
+                    {filteredTransactions.slice(0, 5).map((transaction) => (
+                      <div
+                        key={transaction.id}
+                        className="flex items-center justify-between p-4 border border-gray-200 dark:border-gray-700 rounded-xl bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-xl flex items-center justify-center">
+                            <DollarSign className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900 dark:text-white">
+                              {transaction.name}
+                            </p>
+                            <p className="text-sm text-gray-600 dark:text-gray-400">
+                              {formatDate(transaction.date)}
+                            </p>
+                            {transaction.category &&
+                              transaction.category.length > 0 && (
+                                <p className="text-xs text-gray-500 dark:text-gray-500">
+                                  {transaction.category[0]}
+                                </p>
+                              )}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium text-red-600 dark:text-red-400">
+                            {formatCurrency(Math.abs(transaction.amount))}
+                          </p>
+                          {transaction.pending && (
+                            <Badge
+                              variant="outline"
+                              className="text-xs bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-300 dark:border-yellow-800"
+                            >
+                              <Clock className="h-3 w-3 mr-1" />
+                              Pending
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="pt-4">
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="w-full gap-2"
+                      >
+                        <Link href="/transactions">
+                          View All Transactions
+                          <ArrowRight className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Category Breakdown */}
+          <Card className="mt-8 border-0 shadow-apple-lg">
+            <CardHeader>
+              <CardTitle className="text-gray-900 dark:text-white">
+                Category Breakdown
+              </CardTitle>
+              <CardDescription className="text-gray-600 dark:text-gray-400">
+                Detailed spending by category
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="h-80">
+                <CategoryBarChart data={chartData} />
+              </div>
             </CardContent>
           </Card>
         </div>
-
-        {/* Category Breakdown */}
-        <Card className="mt-8">
-          <CardHeader>
-            <CardTitle className="text-gray-900 dark:text-white">
-              Category Breakdown
-            </CardTitle>
-            <CardDescription className="text-gray-600 dark:text-gray-400">
-              Detailed spending by category
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="h-80">
-              <CategoryBarChart data={chartData} />
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </AuthWrapper>
   );
