@@ -20,6 +20,7 @@ import {
 import CategoryPieChart from "@/components/charts/CategoryPieChart";
 import CategoryBarChart from "@/components/charts/CategoryBarChart";
 import SpendingLineChart from "@/components/charts/SpendingLineChart";
+import ChartErrorBoundary from "@/components/charts/ChartErrorBoundary";
 import {
   CreditCard,
   Filter,
@@ -83,33 +84,10 @@ import AuthWrapper from "@/components/AuthWrapper";
 import PageHeader from "@/components/ui/page-header";
 import { TransactionSkeleton } from "@/components/ui/skeleton";
 import EmptyState from "@/components/ui/empty-state";
+import { useDebounce } from "@/hooks/useDebounce";
 import Image from "next/image";
 
-// Enhanced error boundary component for charts
-const ChartErrorBoundary = ({ children }: { children: React.ReactNode }) => {
-  const [hasError, setHasError] = useState(false);
-
-  if (hasError) {
-    return (
-      <div className="text-center py-8">
-        <div className="w-16 h-16 mx-auto mb-4 bg-red-100 rounded-2xl flex items-center justify-center">
-          <AlertTriangle className="h-8 w-8 text-red-600" />
-        </div>
-        <p className="text-gray-600 mb-2 font-medium">
-          Failed to load chart data
-        </p>
-        <p className="text-sm text-gray-500 mb-4">
-          There was an issue loading the visualization
-        </p>
-        <Button onClick={() => setHasError(false)} variant="outline" size="sm">
-          Try Again
-        </Button>
-      </div>
-    );
-  }
-
-  return <div onError={() => setHasError(true)}>{children}</div>;
-};
+// Chart error boundary is now imported from components
 
 // Enhanced transaction icon component
 const TransactionIcon = ({
@@ -156,7 +134,7 @@ const TransactionIcon = ({
 
   return (
     <div className="relative">
-      <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-primary-200 rounded-xl flex items-center justify-center shadow-sm">
+      <div className="w-12 h-12 bg-gradient-to-br from-primary-100 to-primary-200 rounded-full flex items-center justify-center shadow-sm">
         {imageLoading && (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
@@ -167,7 +145,7 @@ const TransactionIcon = ({
           width={48}
           height={48}
           alt={`${transaction.category} icon`}
-          className={`rounded-xl ${
+          className={`rounded-full ${
             imageLoading ? "opacity-0" : "opacity-100"
           } transition-opacity`}
           onLoad={() => setImageLoading(false)}
@@ -183,23 +161,6 @@ const TransactionIcon = ({
     </div>
   );
 };
-
-// Custom debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedValue(value);
-    }, delay);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [value, delay]);
-
-  return debouncedValue;
-}
 
 export default function TransactionsPage() {
   // Core data state
@@ -265,31 +226,79 @@ export default function TransactionsPage() {
     [pagination.total, filters.limit]
   );
 
-  // Memoized chart data
-  const chartData = useMemo(
-    () => ({
-      creditCardMetrics: calculateCreditCardMetrics(transactions),
-      categoryData: processCategoryData(transactions),
-      timeSeriesData: processTimeSeriesData(
-        transactions,
-        filters.startDate || getCurrentYearRange().startDate,
-        filters.endDate || getCurrentYearRange().endDate
-      ),
-    }),
-    [transactions, filters.startDate, filters.endDate]
-  );
+  // Memoized chart data with error handling
+  const chartData = useMemo(() => {
+    try {
+      const processedData = {
+        creditCardMetrics: calculateCreditCardMetrics(transactions),
+        categoryData: processCategoryData(transactions),
+        timeSeriesData: processTimeSeriesData(
+          transactions,
+          filters.startDate || getCurrentYearRange().startDate,
+          filters.endDate || getCurrentYearRange().endDate
+        ),
+      };
 
-  // Data validation helper
+      // Debug logging
+      console.log("Chart data processed:", {
+        transactionsCount: transactions.length,
+        categoryDataCount: processedData.categoryData.length,
+        timeSeriesDataCount: processedData.timeSeriesData.length,
+        creditCardMetrics: processedData.creditCardMetrics,
+      });
+
+      return processedData;
+    } catch (error) {
+      console.error("Error processing chart data:", error);
+      return {
+        creditCardMetrics: {
+          totalSpending: 0,
+          averageTransaction: 0,
+          largestTransaction: 0,
+          transactionCount: 0,
+        },
+        categoryData: [],
+        timeSeriesData: [],
+      };
+    }
+  }, [transactions, filters.startDate, filters.endDate]);
+
+  // Enhanced data validation helper
   const validateChartData = (data: any) => {
     if (!data || !Array.isArray(data) || data.length === 0) {
       return false;
     }
-    return data.every(
-      (item) =>
-        item &&
-        typeof item.category === "string" &&
-        typeof item.amount === "number"
-    );
+
+    try {
+      // Check if it's category data
+      if (data[0] && "category" in data[0]) {
+        return data.every(
+          (item) =>
+            item &&
+            typeof item.category === "string" &&
+            typeof item.amount === "number" &&
+            !isNaN(item.amount) &&
+            item.amount > 0
+        );
+      }
+
+      // Check if it's time series data
+      if (data[0] && "date" in data[0]) {
+        return data.every(
+          (item) =>
+            item &&
+            typeof item.date === "string" &&
+            typeof item.amount === "number" &&
+            !isNaN(item.amount) &&
+            item.amount >= 0
+        );
+      }
+
+      return false;
+    } catch (error) {
+      console.error("Error validating chart data:", error);
+      return false;
+    }
   };
 
   // Memoized category options
@@ -319,6 +328,7 @@ export default function TransactionsPage() {
     try {
       setError(null);
       setLoading(true);
+      setChartLoading(true);
       const dashboardData = await plaidApi.getDashboardData(filters);
 
       setTransactions(dashboardData.transactions);
@@ -333,6 +343,7 @@ export default function TransactionsPage() {
       );
     } finally {
       setLoading(false);
+      setChartLoading(false);
     }
   }, [filters]);
 
@@ -341,6 +352,7 @@ export default function TransactionsPage() {
     try {
       setError(null);
       setSyncing(true);
+      setChartLoading(true);
       await plaidApi.syncTransactions();
       await loadData();
     } catch (error) {
@@ -350,6 +362,7 @@ export default function TransactionsPage() {
       );
     } finally {
       setSyncing(false);
+      setChartLoading(false);
     }
   }, [loadData]);
 
@@ -425,18 +438,6 @@ export default function TransactionsPage() {
           description="Manage and analyze your spending"
           actions={
             <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="lg" className="gap-2">
-                    <Download className="h-5 w-5" />
-                    Export
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent>
-                  <DropdownMenuItem>Export as CSV</DropdownMenuItem>
-                  <DropdownMenuItem>Export as PDF</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
               <Button
                 onClick={handleSyncTransactions}
                 disabled={syncing}
@@ -819,12 +820,12 @@ export default function TransactionsPage() {
                             <div className="text-right">
                               <div
                                 className={`text-xl font-bold ${
-                                  transaction.amount < 0
+                                  transaction.amount > 0
                                     ? "text-red-600 dark:text-red-400"
                                     : "text-green-600 dark:text-green-400"
                                 }`}
                               >
-                                {transaction.amount < 0 ? "-" : "+"}
+                                {transaction.amount > 0 ? "-" : "+"}
                                 {formatCurrency(Math.abs(transaction.amount))}
                               </div>
                             </div>
@@ -918,86 +919,261 @@ export default function TransactionsPage() {
 
             {/* Analytics Tab */}
             <TabsContent value="analytics" className="space-y-6">
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card className="p-6 border-0 shadow-apple-lg">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Spending Trends
-                    </h3>
-                    <Select defaultValue="30d">
-                      <SelectTrigger className="w-24 rounded-lg">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="7d">7 days</SelectItem>
-                        <SelectItem value="30d">30 days</SelectItem>
-                        <SelectItem value="90d">90 days</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="h-64">
-                    {validateChartData(chartData.timeSeriesData) ? (
-                      <ChartErrorBoundary>
-                        <SpendingLineChart
-                          data={chartData.timeSeriesData}
-                          title=""
-                        />
-                      </ChartErrorBoundary>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-gray-500">
-                        No trend data available
-                      </div>
-                    )}
+              {/* Debug Info - Remove in production */}
+              {process.env.NODE_ENV === "development" && (
+                <Card className="p-4 border-0 bg-yellow-50 dark:bg-yellow-900/20">
+                  <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                    <strong>Debug Info:</strong> Transactions:{" "}
+                    {transactions.length}, Categories:{" "}
+                    {chartData.categoryData.length}, Time Series:{" "}
+                    {chartData.timeSeriesData.length}
                   </div>
                 </Card>
-
-                <Card className="p-6 border-0 shadow-apple-lg">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      Top Categories
-                    </h3>
-                    <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+              )}
+              <ChartErrorBoundary
+                fallback={
+                  <Card className="p-6 border-0 shadow-apple-lg">
+                    <div className="text-center py-8">
+                      <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                        <AlertTriangle className="h-8 w-8 text-red-400" />
+                      </div>
+                      <p className="text-gray-600 dark:text-gray-300 mb-2 font-medium">
+                        Analytics failed to load
+                      </p>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                        There was an issue loading the analytics section
+                      </p>
                       <Button
-                        variant={chartView === "pie" ? "default" : "ghost"}
+                        onClick={() => window.location.reload()}
+                        variant="outline"
                         size="sm"
-                        onClick={() => setChartView("pie")}
-                        className="rounded-lg"
                       >
-                        <PieChart className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant={chartView === "bar" ? "default" : "ghost"}
-                        size="sm"
-                        onClick={() => setChartView("bar")}
-                        className="rounded-lg"
-                      >
-                        <BarChart3 className="h-4 w-4" />
+                        Refresh Page
                       </Button>
                     </div>
-                  </div>
-                  <div className="h-64">
-                    {validateChartData(chartData.categoryData) ? (
-                      <ChartErrorBoundary>
-                        {chartView === "pie" ? (
-                          <CategoryPieChart
-                            data={chartData.categoryData}
+                  </Card>
+                }
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <Card className="p-6 border-0 shadow-apple-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Spending Trends
+                      </h3>
+                      <Select defaultValue="30d">
+                        <SelectTrigger className="w-24 rounded-lg">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="7d">7 days</SelectItem>
+                          <SelectItem value="30d">30 days</SelectItem>
+                          <SelectItem value="90d">90 days</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="h-64">
+                      {chartLoading ? (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                        </div>
+                      ) : validateChartData(chartData.timeSeriesData) &&
+                        chartData.timeSeriesData.length > 0 ? (
+                        <ChartErrorBoundary
+                          fallback={
+                            <div className="h-full flex items-center justify-center">
+                              <div className="text-center">
+                                <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                                  <AlertTriangle className="h-8 w-8 text-red-400" />
+                                </div>
+                                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                  Chart failed to render
+                                </p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                  Try refreshing the page
+                                </p>
+                              </div>
+                            </div>
+                          }
+                        >
+                          <SpendingLineChart
+                            data={chartData.timeSeriesData}
                             title=""
                           />
-                        ) : (
-                          <CategoryBarChart
-                            data={chartData.categoryData}
-                            title=""
-                          />
-                        )}
-                      </ChartErrorBoundary>
-                    ) : (
-                      <div className="h-full flex items-center justify-center text-gray-500">
-                        No category data available
+                        </ChartErrorBoundary>
+                      ) : (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                              <TrendingUp className="h-8 w-8 text-gray-400" />
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                              No trend data available
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                              Sync transactions to see spending trends
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+
+                  <Card className="p-6 border-0 shadow-apple-lg">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        Top Categories
+                      </h3>
+                      <div className="flex gap-2 bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+                        <Button
+                          variant={chartView === "pie" ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => setChartView("pie")}
+                          className="rounded-lg"
+                        >
+                          <PieChart className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant={chartView === "bar" ? "default" : "ghost"}
+                          size="sm"
+                          onClick={() => setChartView("bar")}
+                          className="rounded-lg"
+                        >
+                          <BarChart3 className="h-4 w-4" />
+                        </Button>
                       </div>
-                    )}
-                  </div>
-                </Card>
-              </div>
+                    </div>
+                    <div className="h-64">
+                      {chartLoading ? (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                        </div>
+                      ) : validateChartData(chartData.categoryData) &&
+                        chartData.categoryData.length > 0 ? (
+                        <ChartErrorBoundary
+                          fallback={
+                            <div className="h-full flex items-center justify-center">
+                              <div className="text-center">
+                                <div className="w-16 h-16 mx-auto mb-4 bg-red-100 dark:bg-red-900/20 rounded-full flex items-center justify-center">
+                                  <AlertTriangle className="h-8 w-8 text-red-400" />
+                                </div>
+                                <p className="text-gray-500 dark:text-gray-400 text-sm">
+                                  Chart failed to render
+                                </p>
+                                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                                  Try refreshing the page
+                                </p>
+                              </div>
+                            </div>
+                          }
+                        >
+                          {chartView === "pie" ? (
+                            <CategoryPieChart
+                              data={chartData.categoryData}
+                              title=""
+                            />
+                          ) : (
+                            <CategoryBarChart
+                              data={chartData.categoryData}
+                              title=""
+                            />
+                          )}
+                        </ChartErrorBoundary>
+                      ) : (
+                        <div className="h-full flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                              <BarChart3 className="h-8 w-8 text-gray-400" />
+                            </div>
+                            <p className="text-gray-500 dark:text-gray-400 text-sm">
+                              No category data available
+                            </p>
+                            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                              Sync transactions to see category breakdown
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Additional Analytics Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <Card className="p-6 border-0 shadow-apple-lg">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
+                        <TrendingUp className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          Total Spending
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          This period
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                      {formatCurrency(
+                        chartData.creditCardMetrics.totalSpending
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {chartData.creditCardMetrics.transactionCount}{" "}
+                      transactions
+                    </p>
+                  </Card>
+
+                  <Card className="p-6 border-0 shadow-apple-lg">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-xl flex items-center justify-center">
+                        <Target className="h-5 w-5 text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          Average Transaction
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Per transaction
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
+                      {formatCurrency(
+                        chartData.creditCardMetrics.averageTransaction
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Based on {chartData.creditCardMetrics.transactionCount}{" "}
+                      transactions
+                    </p>
+                  </Card>
+
+                  <Card className="p-6 border-0 shadow-apple-lg">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
+                        <Activity className="h-5 w-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">
+                          Largest Transaction
+                        </h3>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Single transaction
+                        </p>
+                      </div>
+                    </div>
+                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+                      {formatCurrency(
+                        chartData.creditCardMetrics.largestTransaction
+                      )}
+                    </div>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      Highest single expense
+                    </p>
+                  </Card>
+                </div>
+              </ChartErrorBoundary>
             </TabsContent>
 
             {/* Insights Tab */}

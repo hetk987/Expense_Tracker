@@ -1,7 +1,48 @@
 import { type ClassValue, clsx } from "clsx"
+import { TransactionFilters } from "@/types"
 
 export function cn(...inputs: ClassValue[]) {
     return clsx(inputs)
+}
+
+/**
+ * Utility function to parse URL search parameters into TransactionFilters
+ * Eliminates redundant parameter parsing across API endpoints
+ */
+export function parseTransactionFilters(searchParams: URLSearchParams): TransactionFilters {
+    return {
+        accountId: searchParams.get('accountId') || undefined,
+        startDate: searchParams.get('startDate') || undefined,
+        endDate: searchParams.get('endDate') || undefined,
+        limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
+        offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : undefined,
+        category: searchParams.get('category') || undefined,
+        search: searchParams.get('search') || undefined,
+        status: searchParams.get('status') || undefined,
+        sortBy: searchParams.get('sortBy') as "date" | "amount" | "name" | undefined,
+        sortOrder: searchParams.get('sortOrder') as "asc" | "desc" | undefined,
+    };
+}
+
+/**
+ * Utility function to build URL search parameters from TransactionFilters
+ * Eliminates redundant parameter building in API client methods
+ */
+export function buildTransactionParams(filters: TransactionFilters): URLSearchParams {
+    const params = new URLSearchParams();
+
+    if (filters.accountId) params.append('accountId', filters.accountId);
+    if (filters.startDate) params.append('startDate', filters.startDate);
+    if (filters.endDate) params.append('endDate', filters.endDate);
+    if (filters.limit) params.append('limit', filters.limit.toString());
+    if (filters.offset) params.append('offset', filters.offset.toString());
+    if (filters.category) params.append('category', filters.category);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.status) params.append('status', filters.status);
+    if (filters.sortBy) params.append('sortBy', filters.sortBy);
+    if (filters.sortOrder) params.append('sortOrder', filters.sortOrder);
+
+    return params;
 }
 
 export function formatCurrency(amount: number): string {

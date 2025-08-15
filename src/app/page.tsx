@@ -76,18 +76,16 @@ export default function Dashboard() {
   const loadDashboardData = async () => {
     try {
       setLoading(true);
-      const [accountsData, recentTransactionsData, allTransactionsData] =
-        await Promise.all([
-          plaidApi.getAccounts(),
-          plaidApi.getTransactions({ limit: 10 }),
-          plaidApi.getTransactions({
-            limit: 1000,
-            ...getCurrentYearRange(),
-          }),
-        ]);
-      setAccounts(accountsData);
-      setRecentTransactions(recentTransactionsData.transactions);
-      setAllTransactions(allTransactionsData.transactions);
+      // Use optimized single API call instead of multiple separate calls
+      const dashboardData = await plaidApi.getDashboardData({
+        limit: 1000,
+        ...getCurrentYearRange(),
+      });
+
+      setAccounts(dashboardData.accounts);
+      setAllTransactions(dashboardData.transactions);
+      // Get recent transactions by slicing the first 10 from sorted results
+      setRecentTransactions(dashboardData.transactions.slice(0, 10));
     } catch (error) {
       console.error("Error loading dashboard data:", error);
     } finally {

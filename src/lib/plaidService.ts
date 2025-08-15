@@ -406,13 +406,13 @@ export class PlaidService {
                     where: {
                         ...where,
                         // Exclude credit card payments at database level
-                        NOT: {
-                            AND: [
-                                { name: { contains: 'INTERNET PAYMENT - THANK YOU', mode: 'insensitive' } },
-                                { merchantName: null },
-                                { category: 'LOAN_PAYMENTS' }
-                            ]
-                        }
+                        // NOT: {
+                        //     AND: [
+                        //         { name: { contains: 'INTERNET PAYMENT - THANK YOU', mode: 'insensitive' } },
+                        //         { merchantName: null },
+                        //         { category: 'LOAN_PAYMENTS' }
+                        //     ]
+                        // }
                     },
                     include: { account: true },
                     orderBy: this.buildOrderBy(filters),

@@ -38,29 +38,28 @@ export function filterOutCreditCardPayments(transactions: PlaidTransaction[]): P
 }
 
 /**
+ * Helper function to check if a partial transaction object is a credit card payment
+ * Uses the same logic as isCreditCardPayment but works with partial transaction objects
+g */
+function isPartialCreditCardPayment(transaction: { name: string; merchantName?: string | null; category?: string }): boolean {
+    const name = transaction.name.toUpperCase();
+    const merchantName = transaction.merchantName;
+    const category = transaction.category?.toUpperCase();
+
+    // Use the same logic as isCreditCardPayment
+    return name.includes('INTERNET PAYMENT - THANK YOU') &&
+        (!merchantName || merchantName.trim() === '') &&
+        category === 'LOAN_PAYMENT';
+}
+
+/**
  * Filters out credit card payments from partial transaction objects (for backend use)
+ * Uses the same logic as isCreditCardPayment for consistency
  */
 export function filterOutCreditCardPaymentsPartial<T extends { amount: number; name: string; merchantName?: string | null; category?: string }>(
     transactions: T[]
 ): T[] {
-    return transactions.filter((transaction) => {
-        // Use the same simplified logic as isCreditCardPayment
-        const name = transaction.name.toUpperCase();
-        const merchantName = transaction.merchantName;
-        const category = transaction.category?.toUpperCase();
-
-        // Filter out transactions that match the specific pattern:
-        // 1. Name contains "INTERNET PAYMENT - THANK YOU"
-        // 2. No merchant name (null, undefined, or empty string)
-        // 3. Category is "LOAN_PAYMENTS"
-        if (name.includes('INTERNET PAYMENT - THANK YOU') &&
-            (!merchantName || merchantName.trim() === '') &&
-            category === 'LOAN_PAYMENTS') {
-            return false; // Filter out this transaction
-        }
-
-        return true; // Keep this transaction
-    });
+    return transactions.filter((transaction) => !isPartialCreditCardPayment(transaction));
 }
 
 export function processCategoryData(transactions: PlaidTransaction[]): CategoryData[] {
