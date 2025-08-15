@@ -10,7 +10,7 @@ export interface ButtonProps
     | "secondary"
     | "ghost"
     | "link";
-  size?: "default" | "sm" | "lg" | "icon";
+  size?: "default" | "sm" | "lg" | "icon" | "xl";
   asChild?: boolean;
 }
 
@@ -50,6 +50,7 @@ const Button = React.forwardRef<
       sm: "h-9 rounded-md px-3",
       lg: "h-11 rounded-md px-8",
       icon: "h-10 w-10",
+      xl: "h-12 px-6 py-3 text-lg",
     };
 
     const classes = cn(

@@ -45,13 +45,14 @@ import {
   processTimeSeriesData,
   calculateCreditCardMetrics,
   getTopSpendingCategories,
-  processTransactionsForCharts,
+  getAllCategoriesWithCounts,
 } from "@/lib/chartUtils";
 import CategoryBarChart from "@/components/charts/CategoryBarChart";
 import AuthWrapper from "@/components/AuthWrapper";
 import PageHeader from "@/components/ui/page-header";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import EmptyState from "@/components/ui/empty-state";
+import Image from "next/image";
 
 export default function Dashboard() {
   const router = useRouter();
@@ -66,6 +67,7 @@ export default function Dashboard() {
   const [syncing, setSyncing] = useState(false);
   const [chartView, setChartView] = useState<"pie" | "bar" | "line">("pie");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [showAllCategories, setShowAllCategories] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -105,14 +107,26 @@ export default function Dashboard() {
     }
   };
 
-  const creditCardMetrics = calculateCreditCardMetrics(allTransactions);
-  const categoryData = processCategoryData(allTransactions);
   const timeSeriesData = processTimeSeriesData(
     allTransactions,
     getCurrentYearRange().startDate,
     getCurrentYearRange().endDate
   );
-  const topCategories = getTopSpendingCategories(allTransactions, 5);
+  const topCategories = showAllCategories
+    ? getAllCategoriesWithCounts(allTransactions)
+    : getTopSpendingCategories(allTransactions);
+  const creditCardMetrics = calculateCreditCardMetrics(allTransactions);
+  const categoryData = showAllCategories
+    ? getAllCategoriesWithCounts(allTransactions)
+    : processCategoryData(allTransactions);
+
+  // Get categories from ALL transactions, not filtered ones
+  const allCategories = [
+    "all",
+    ...Array.from(
+      new Set(allTransactions.flatMap((t) => t.category || []).filter(Boolean))
+    ),
+  ];
 
   const filteredTransactions =
     selectedCategory === "all"
@@ -135,15 +149,6 @@ export default function Dashboard() {
       ? Math.max(...filteredTransactions.map((t) => Math.abs(t.amount)))
       : 0;
 
-  const categories = [
-    "all",
-    ...Array.from(
-      new Set(
-        filteredTransactions.flatMap((t) => t.category || []).filter(Boolean)
-      )
-    ),
-  ];
-
   if (loading) {
     return (
       <AuthWrapper>
@@ -165,7 +170,7 @@ export default function Dashboard() {
             <>
               <Button
                 variant="outline"
-                size="lg"
+                size="sm"
                 onClick={handleSyncTransactions}
                 disabled={syncing}
                 className="gap-2"
@@ -175,8 +180,8 @@ export default function Dashboard() {
                 />
                 {syncing ? "Syncing..." : "Sync"}
               </Button>
-              <Button size="lg" asChild className="gap-2">
-                <Link href="/link-account">
+              <Button size="sm" asChild className="flex items-center">
+                <Link href="/link-account" className="flex items-center gap-2">
                   <Plus className="h-5 w-5" />
                   Add Account
                 </Link>
@@ -187,27 +192,43 @@ export default function Dashboard() {
 
         <div className="container mx-auto px-6 py-8">
           {/* Smart Category Filter */}
-          {categories.length > 1 && (
+          {allCategories.length > 1 && (
             <div className="mb-8">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
                   Filter by Category
                 </h2>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSelectedCategory("all")}
-                  className={
-                    selectedCategory === "all"
-                      ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
-                      : ""
-                  }
-                >
-                  View All
-                </Button>
+                <div className="flex items-center gap-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAllCategories(!showAllCategories)}
+                    className={`${
+                      showAllCategories
+                        ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+                        : ""
+                    }`}
+                  >
+                    {showAllCategories
+                      ? "Show Expenses Only"
+                      : "Show All Categories"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedCategory("all")}
+                    className={
+                      selectedCategory === "all"
+                        ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+                        : ""
+                    }
+                  >
+                    View All
+                  </Button>
+                </div>
               </div>
               <div className="flex flex-wrap gap-3">
-                {categories.slice(0, 8).map((category) => (
+                {allCategories.slice(0, 8).map((category) => (
                   <Button
                     key={String(category)}
                     variant={
@@ -224,13 +245,13 @@ export default function Dashboard() {
                     {category === "all" ? "All Categories" : String(category)}
                   </Button>
                 ))}
-                {categories.length > 8 && (
+                {allCategories.length > 8 && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="text-primary-600"
                   >
-                    +{categories.length - 8} more
+                    +{allCategories.length - 8} more
                   </Button>
                 )}
               </div>
@@ -343,7 +364,7 @@ export default function Dashboard() {
                       variant={chartView === "pie" ? "default" : "ghost"}
                       size="sm"
                       onClick={() => setChartView("pie")}
-                      className="rounded-lg"
+                      className="rounded-full"
                     >
                       <PieChart className="h-4 w-4" />
                     </Button>
@@ -351,7 +372,7 @@ export default function Dashboard() {
                       variant={chartView === "bar" ? "default" : "ghost"}
                       size="sm"
                       onClick={() => setChartView("bar")}
-                      className="rounded-lg"
+                      className="rounded-full"
                     >
                       <BarChart3 className="h-4 w-4" />
                     </Button>
@@ -404,7 +425,10 @@ export default function Dashboard() {
                   </div>
                   {accounts.length > 0 && (
                     <Button variant="outline" size="sm" asChild>
-                      <Link href="/accounts" className="gap-2">
+                      <Link
+                        href="/accounts"
+                        className="flex items-center gap-2"
+                      >
                         Manage
                         <ArrowRight className="h-4 w-4" />
                       </Link>
@@ -492,7 +516,12 @@ export default function Dashboard() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600 rounded-xl flex items-center justify-center">
-                            <DollarSign className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                            <Image
+                              src={transaction.categoryIcon || ""}
+                              alt={transaction.name}
+                              width={40}
+                              height={40}
+                            />
                           </div>
                           <div>
                             <p className="font-medium text-gray-900 dark:text-white">
@@ -504,7 +533,7 @@ export default function Dashboard() {
                             {transaction.category &&
                               transaction.category.length > 0 && (
                                 <p className="text-xs text-gray-500 dark:text-gray-500">
-                                  {transaction.category[0]}
+                                  {transaction.category}
                                 </p>
                               )}
                           </div>
@@ -531,7 +560,10 @@ export default function Dashboard() {
                         variant="outline"
                         className="w-full gap-2"
                       >
-                        <Link href="/transactions">
+                        <Link
+                          href="/transactions"
+                          className="flex items-center gap-2"
+                        >
                           View All Transactions
                           <ArrowRight className="h-4 w-4" />
                         </Link>
@@ -542,23 +574,6 @@ export default function Dashboard() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Category Breakdown */}
-          <Card className="mt-8 border-0 shadow-apple-lg">
-            <CardHeader>
-              <CardTitle className="text-gray-900 dark:text-white">
-                Category Breakdown
-              </CardTitle>
-              <CardDescription className="text-gray-600 dark:text-gray-400">
-                Detailed spending by category
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="h-80">
-                <CategoryBarChart data={chartData} />
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </div>
     </AuthWrapper>

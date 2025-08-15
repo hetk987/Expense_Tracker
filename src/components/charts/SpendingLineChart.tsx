@@ -14,6 +14,12 @@ import {
   ChartOptions,
 } from "chart.js";
 import { TimeSeriesData } from "@/types";
+import {
+  CHART_COLORS,
+  getCommonChartOptions,
+  getThemeColors,
+} from "@/lib/chartConfig";
+import { useTheme } from "@/hooks/useTheme";
 
 ChartJS.register(
   CategoryScale,
@@ -35,13 +41,31 @@ export default function SpendingLineChart({
   data,
   title = "Spending Over Time",
 }: SpendingLineChartProps) {
+  const isDark = useTheme();
+
   // Handle undefined or null data
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-        <div className="h-80 flex items-center justify-center">
-          <p className="text-gray-500">No data available</p>
+      <div className="flex items-center justify-center h-80">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+            <svg
+              className="w-8 h-8 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+              />
+            </svg>
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            No data available
+          </p>
         </div>
       </div>
     );
@@ -53,128 +77,98 @@ export default function SpendingLineChart({
       {
         label: "Daily Spending",
         data: data.map((item) => Math.abs(item.amount)),
-        borderColor: "#EF4444",
-        backgroundColor: "rgba(239, 68, 68, 0.1)",
-        borderWidth: 2,
+        borderColor: CHART_COLORS.semantic.expense,
+        backgroundColor: isDark
+          ? CHART_COLORS.semantic.expense + "20"
+          : CHART_COLORS.semantic.expense + "10",
+        borderWidth: 3,
         fill: true,
         tension: 0.4,
-        pointBackgroundColor: "#EF4444",
-        pointBorderColor: "#ffffff",
-        pointBorderWidth: 2,
-        pointRadius: 4,
-        pointHoverRadius: 6,
+        pointBackgroundColor: CHART_COLORS.semantic.expense,
+        pointBorderColor: isDark ? "#1F2937" : "#FFFFFF",
+        pointBorderWidth: 3,
+        pointRadius: 6,
+        pointHoverRadius: 8,
+        pointHoverBackgroundColor: CHART_COLORS.semantic.expense,
+        pointHoverBorderColor: isDark ? "#374151" : "#F3F4F6",
+        pointHoverBorderWidth: 4,
       },
     ],
   };
 
   const options: ChartOptions<"line"> = {
-    responsive: true,
-    maintainAspectRatio: false,
+    ...getCommonChartOptions(isDark),
     plugins: {
+      ...getCommonChartOptions(isDark).plugins,
       legend: {
         position: "top" as const,
         labels: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#e5e7eb"
-              : "#374151",
+          color: getThemeColors(isDark).text.secondary,
           usePointStyle: true,
           font: {
-            size: 12,
+            size: 13,
+            family:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+            weight: 500,
           },
+          padding: 20,
         },
       },
       tooltip: {
-        backgroundColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#1f2937"
-            : "#ffffff",
-        titleColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#f9fafb"
-            : "#111827",
-        bodyColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#d1d5db"
-            : "#374151",
-        borderColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#374151"
-            : "#e5e7eb",
-        borderWidth: 1,
-        cornerRadius: 8,
+        ...getCommonChartOptions(isDark).plugins?.tooltip,
         callbacks: {
           label: function (context: any) {
-            return `${context.dataset.label}: $${context.parsed.y.toFixed(2)}`;
+            const label = context.label || "";
+            const value = context.parsed;
+            return `${label}: $${value.toFixed(2)}`;
           },
         },
       },
     },
     scales: {
       x: {
-        display: true,
-        title: {
-          display: true,
-          text: "Date",
-        },
         grid: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#374151"
-              : "#e5e7eb",
+          color: getThemeColors(isDark).grid,
         },
         ticks: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#9ca3af"
-              : "#6b7280",
+          color: getThemeColors(isDark).text.secondary,
+          font: {
+            size: 12,
+            family:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          },
+          padding: 8,
+        },
+        border: {
+          display: false,
         },
       },
       y: {
-        display: true,
-        title: {
-          display: true,
-          text: "Amount ($)",
-        },
         grid: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#374151"
-              : "#e5e7eb",
+          color: getThemeColors(isDark).grid,
         },
         ticks: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#9ca3af"
-              : "#6b7280",
+          color: getThemeColors(isDark).text.secondary,
+          font: {
+            size: 12,
+            family:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          },
+          padding: 8,
           callback: function (value: any) {
-            return "$" + value.toFixed(0);
+            return `$${value.toFixed(0)}`;
           },
         },
+        border: {
+          display: false,
+        },
       },
-    },
-    interaction: {
-      mode: "nearest" as const,
-      axis: "x" as const,
-      intersect: false,
     },
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      <div className="h-80">
-        <Line data={chartData} options={options} />
-      </div>
+    <div className="h-full w-full">
+      <Line data={chartData} options={options} />
     </div>
   );
 }

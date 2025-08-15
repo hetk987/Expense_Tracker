@@ -12,6 +12,12 @@ import {
   ChartOptions,
 } from "chart.js";
 import { CategoryData } from "@/types";
+import {
+  CHART_COLORS,
+  getCommonChartOptions,
+  getThemeColors,
+} from "@/lib/chartConfig";
+import { useTheme } from "@/hooks/useTheme";
 
 ChartJS.register(
   CategoryScale,
@@ -27,35 +33,35 @@ interface CategoryBarChartProps {
   title?: string;
 }
 
-const COLORS = [
-  "#3B82F6",
-  "#EF4444",
-  "#10B981",
-  "#F59E0B",
-  "#8B5CF6",
-  "#06B6D4",
-  "#84CC16",
-  "#F97316",
-  "#EC4899",
-  "#6366F1",
-  "#14B8A6",
-  "#F43F5E",
-  "#A855F7",
-  "#0EA5E9",
-  "#22C55E",
-];
-
 export default function CategoryBarChart({
   data,
   title = "Spending by Category",
 }: CategoryBarChartProps) {
+  const isDark = useTheme();
+
   // Handle undefined or null data
   if (!data || data.length === 0) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-        <div className="h-80 flex items-center justify-center">
-          <p className="text-gray-500">No data available</p>
+      <div className="flex items-center justify-center h-80">
+        <div className="text-center">
+          <div className="w-16 h-16 mx-auto mb-4 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+            <svg
+              className="w-8 h-8 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
+              />
+            </svg>
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">
+            No data available
+          </p>
         </div>
       </div>
     );
@@ -67,110 +73,86 @@ export default function CategoryBarChart({
       {
         label: "Amount ($)",
         data: data.map((item) => Math.abs(item.amount)),
-        backgroundColor: COLORS.slice(0, data.length),
-        borderColor: COLORS.slice(0, data.length).map((color) => color + "80"),
-        borderWidth: 1,
-        borderRadius: 4,
+        backgroundColor: CHART_COLORS.primary
+          .slice(0, data.length)
+          .map((color) => (isDark ? color + "40" : color + "20")),
+        borderColor: CHART_COLORS.primary.slice(0, data.length),
+        borderWidth: 2,
+        borderRadius: 8,
+        borderSkipped: false,
+        hoverBackgroundColor: CHART_COLORS.primary
+          .slice(0, data.length)
+          .map((color) => (isDark ? color + "60" : color + "40")),
+        hoverBorderColor: CHART_COLORS.primary.slice(0, data.length),
+        hoverBorderWidth: 3,
       },
     ],
   };
 
   const options: ChartOptions<"bar"> = {
-    responsive: true,
-    maintainAspectRatio: false,
+    ...getCommonChartOptions(isDark),
     plugins: {
+      ...getCommonChartOptions(isDark).plugins,
       legend: {
         display: false,
       },
       tooltip: {
-        backgroundColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#1f2937"
-            : "#ffffff",
-        titleColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#f9fafb"
-            : "#111827",
-        bodyColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#d1d5db"
-            : "#374151",
-        borderColor:
-          typeof window !== "undefined" &&
-          document.documentElement.classList.contains("dark")
-            ? "#374151"
-            : "#e5e7eb",
-        borderWidth: 1,
-        cornerRadius: 8,
+        ...getCommonChartOptions(isDark).plugins?.tooltip,
         callbacks: {
           label: function (context: any) {
-            const value = context.parsed.y;
-            const total = context.dataset.data.reduce(
-              (a: number, b: number) => a + b,
-              0
-            );
-            const percentage = ((value / total) * 100).toFixed(1);
-            return `$${value.toFixed(2)} (${percentage}%)`;
+            const label = context.label || "";
+            const value = context.parsed;
+            return `${label}: $${value.toFixed(2)}`;
           },
         },
       },
     },
     scales: {
       x: {
-        display: true,
-        title: {
-          display: true,
-          text: "Category",
-        },
         grid: {
-          display: false,
+          color: getThemeColors(isDark).grid,
         },
         ticks: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#9ca3af"
-              : "#6b7280",
+          color: getThemeColors(isDark).text.secondary,
+          font: {
+            size: 12,
+            family:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+          },
+          padding: 8,
           maxRotation: 45,
           minRotation: 0,
         },
+        border: {
+          display: false,
+        },
       },
       y: {
-        display: true,
-        title: {
-          display: true,
-          text: "Amount ($)",
-        },
         grid: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#374151"
-              : "#e5e7eb",
+          color: getThemeColors(isDark).grid,
         },
         ticks: {
-          color:
-            typeof window !== "undefined" &&
-            document.documentElement.classList.contains("dark")
-              ? "#9ca3af"
-              : "#6b7280",
-          callback: function (value: any) {
-            return "$" + value.toFixed(0);
+          color: getThemeColors(isDark).text.secondary,
+          font: {
+            size: 12,
+            family:
+              '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
           },
+          padding: 8,
+          callback: function (value: any) {
+            return `$${value.toFixed(0)}`;
+          },
+        },
+        border: {
+          display: false,
         },
       },
     },
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
-      <div className="h-80">
-        <Bar data={chartData} options={options} />
-      </div>
+    <div className="h-full w-full">
+      <Bar data={chartData} options={options} />
     </div>
   );
 }

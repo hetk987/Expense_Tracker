@@ -71,7 +71,7 @@ export function processCategoryData(transactions: PlaidTransaction[]): CategoryD
 
     // Process transactions
     filteredTransactions.forEach(transaction => {
-        if (transaction.amount < 0) { // Only process expenses (negative amounts)
+        if (transaction.amount > 0) { // Only process expenses (negative amounts)
             // Fix: Use full category name, not just first character
             const category = transaction.category || 'Uncategorized'
             const current = categoryMap.get(category) || { amount: 0, count: 0 }
@@ -157,6 +157,46 @@ export function getAvailableCategories(transactions: PlaidTransaction[]): string
     return Array.from(categories).sort()
 }
 
+export function getTopSpendingCategories(transactions: PlaidTransaction[]): CategoryData[] {
+    const categoryData = processCategoryData(transactions)
+    return categoryData
+}
+
+export function getAllCategoriesWithCounts(transactions: PlaidTransaction[]): CategoryData[] {
+    const categoryMap = new Map<string, { amount: number; count: number; income: number; expenses: number }>()
+
+    transactions.forEach(transaction => {
+        const category = transaction.category || 'Uncategorized'
+        const current = categoryMap.get(category) || { amount: 0, count: 0, income: 0, expenses: 0 }
+
+        if (transaction.amount > 0) {
+            // Income/positive amounts
+            current.income += transaction.amount
+            current.amount += transaction.amount
+        } else {
+            // Expenses/negative amounts
+            current.expenses += Math.abs(transaction.amount)
+            current.amount += Math.abs(transaction.amount)
+        }
+
+        current.count += 1
+
+        categoryMap.set(category, current)
+    })
+
+    // Convert to array and sort by transaction count descending
+    const categoryData: CategoryData[] = Array.from(categoryMap.entries())
+        .map(([category, { amount, count, income, expenses }]) => ({
+            category,
+            amount,
+            count,
+            percentage: 0 // We'll calculate this based on what the user wants to see
+        }))
+        .sort((a, b) => b.count - a.count) // Sort by transaction count
+
+    return categoryData
+}
+
 export function calculateCreditCardMetrics(transactions: PlaidTransaction[]) {
     // Filter out credit card payments before calculating metrics
     const filteredTransactions = filterOutCreditCardPayments(transactions)
@@ -173,14 +213,9 @@ export function calculateCreditCardMetrics(transactions: PlaidTransaction[]) {
     }
 }
 
-export function getTopSpendingCategories(transactions: PlaidTransaction[], limit: number = 5): CategoryData[] {
-    const categoryData = processCategoryData(transactions)
-    return categoryData.slice(0, limit)
-}
-
 export function processTransactionsForCharts(transactions: PlaidTransaction[]) {
     const categoryBreakdown = processCategoryData(transactions)
-    const topCategories = getTopSpendingCategories(transactions, 5)
+    const topCategories = processCategoryData(transactions)
 
     return {
         categoryBreakdown,
