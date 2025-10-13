@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prismaClient';
 import { debugProtected, logDebugAccess } from '@/lib/debugAuth';
 import { filterOutCreditCardPayments, getCreditCardPayments } from '@/lib/chartUtils';
-import { convertPrismaTransactions } from '@/lib/utils';
+import { convertPrismaTransactions, createLocalDate } from '@/lib/utils';
 
 async function getTransactionsHandler(request: NextRequest) {
     try {
@@ -27,10 +27,10 @@ async function getTransactionsHandler(request: NextRequest) {
         if (startDate || endDate) {
             where.date = {};
             if (startDate) {
-                where.date.gte = new Date(startDate);
+                where.date.gte = createLocalDate(startDate, false);
             }
             if (endDate) {
-                where.date.lte = new Date(endDate);
+                where.date.lte = createLocalDate(endDate, true);
             }
         }
 

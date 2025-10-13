@@ -1,6 +1,6 @@
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import { prisma } from './prismaClient';
-import { getCurrentYearRange } from './utils';
+import { getCurrentYearRange, createLocalDate, toDateString } from './utils';
 import { Decimal } from '@prisma/client/runtime/library';
 import { TRANSACTION_LIMITS, PAGINATION } from './constants';
 import { filterOutCreditCardPaymentsPartial } from './chartUtils';
@@ -29,6 +29,7 @@ export interface TransactionFilters {
     sortBy?: "date" | "amount" | "name";
     sortOrder?: "asc" | "desc";
 }
+
 
 export class PlaidService {
     /**
@@ -209,14 +210,14 @@ export class PlaidService {
             if (filters.startDate) {
                 where.date = {
                     ...where.date,
-                    gte: new Date(filters.startDate),
+                    gte: createLocalDate(filters.startDate, false),
                 };
             }
 
             if (filters.endDate) {
                 where.date = {
                     ...where.date,
-                    lte: new Date(filters.endDate),
+                    lte: createLocalDate(filters.endDate, true),
                 };
             }
 
@@ -307,14 +308,14 @@ export class PlaidService {
             if (filters.startDate) {
                 where.date = {
                     ...where.date,
-                    gte: new Date(filters.startDate),
+                    gte: createLocalDate(filters.startDate, false),
                 };
             }
 
             if (filters.endDate) {
                 where.date = {
                     ...where.date,
-                    lte: new Date(filters.endDate),
+                    lte: createLocalDate(filters.endDate, true),
                 };
             }
 
@@ -584,11 +585,11 @@ export class PlaidService {
         }
 
         if (filters.startDate) {
-            where.date = { ...where.date, gte: new Date(filters.startDate) };
+            where.date = { ...where.date, gte: createLocalDate(filters.startDate, false) };
         }
 
         if (filters.endDate) {
-            where.date = { ...where.date, lte: new Date(filters.endDate) };
+            where.date = { ...where.date, lte: createLocalDate(filters.endDate, true) };
         }
 
         if (filters.category && filters.category !== 'all') {
@@ -653,10 +654,10 @@ export class PlaidService {
             if (filters.startDate || filters.endDate) {
                 whereClause.date = {};
                 if (filters.startDate) {
-                    whereClause.date.gte = new Date(filters.startDate);
+                    whereClause.date.gte = createLocalDate(filters.startDate, false);
                 }
                 if (filters.endDate) {
-                    whereClause.date.lte = new Date(filters.endDate);
+                    whereClause.date.lte = createLocalDate(filters.endDate, true);
                 }
             }
 
@@ -747,10 +748,10 @@ export class PlaidService {
             });
 
             const startDate = lastTransaction
-                ? lastTransaction.date.toISOString().split('T')[0]
+                ? toDateString(new Date(lastTransaction.date))
                 : getCurrentYearRange().startDate; // Use start of current year for new accounts
 
-            const endDate = new Date().toISOString().split('T')[0];
+            const endDate = toDateString(new Date());
 
             // Fetch all transactions from Plaid using pagination
             const transactions = await this.fetchAllTransactions(

@@ -22,8 +22,9 @@ async function refreshTransactionsHandler(request: NextRequest) {
         // Get current year range - limit to last 2 years to avoid Plaid API limits
         const now = new Date();
         const thisYear = new Date(now.getFullYear(), 0, 1); // January 1st, 2 years ago
-        const startDate = thisYear.toISOString().split('T')[0];
-        const endDate = now.toISOString().split('T')[0]; // Today
+        const { toDateString } = await import('@/lib/utils');
+        const startDate = toDateString(thisYear);
+        const endDate = toDateString(now); // Today
 
         console.log('Date range for refresh:', { startDate, endDate });
 

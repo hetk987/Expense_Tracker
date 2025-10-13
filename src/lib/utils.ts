@@ -53,7 +53,7 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(dateString: string): string {
-    const date = new Date(dateString);
+    const date = createLocalDate(dateString);
     return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'short',
@@ -62,7 +62,7 @@ export function formatDate(dateString: string): string {
 }
 
 export function formatDateTime(dateString: string): string {
-    const date = new Date(dateString);
+    const date = createLocalDate(dateString);
     return new Intl.DateTimeFormat('en-US', {
         year: 'numeric',
         month: 'short',
@@ -76,6 +76,38 @@ export function getMonthName(date: Date): string {
     return date.toLocaleDateString('en-US', { month: 'long' });
 }
 
+/**
+ * Creates a local date object from a date string, avoiding timezone conversion issues
+ * @param dateStr - Date string in YYYY-MM-DD format or full ISO string
+ * @param isEndDate - If true, sets time to end of day (23:59:59.999), otherwise start of day (00:00:00.000)
+ * @returns Date object in local timezone
+ */
+export function createLocalDate(dateStr: string, isEndDate: boolean = false): Date {
+    // If it's already a full ISO string, parse it and convert to local
+    if (dateStr.includes('T')) {
+        return new Date(dateStr);
+    }
+    
+    // For date-only strings (YYYY-MM-DD), create a local date
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (isEndDate) {
+        // For end dates, use end of day (23:59:59.999)
+        return new Date(year, month - 1, day, 23, 59, 59, 999);
+    } else {
+        // For start dates, use start of day (00:00:00.000)
+        return new Date(year, month - 1, day, 0, 0, 0, 0);
+    }
+}
+
+/**
+ * Converts a Date object to YYYY-MM-DD string format
+ * @param date - Date object to convert
+ * @returns Date string in YYYY-MM-DD format
+ */
+export function toDateString(date: Date): string {
+    return date.toISOString().split('T')[0];
+}
+
 export function getCurrentMonthRange() {
     const now = new Date();
     // Use UTC to avoid timezone issues
@@ -83,8 +115,8 @@ export function getCurrentMonthRange() {
     const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0));
 
     return {
-        startDate: startOfMonth.toISOString().split('T')[0],
-        endDate: endOfMonth.toISOString().split('T')[0],
+        startDate: toDateString(startOfMonth),
+        endDate: toDateString(endOfMonth),
     };
 }
 
@@ -95,8 +127,8 @@ export function getCurrentYearRange() {
     const endOfYear = new Date(Date.UTC(now.getFullYear(), 11, 31)); // December 31st of current year
 
     return {
-        startDate: startOfYear.toISOString().split('T')[0],
-        endDate: endOfYear.toISOString().split('T')[0],
+        startDate: toDateString(startOfYear),
+        endDate: toDateString(endOfYear),
     };
 }
 
@@ -107,8 +139,8 @@ export function getLast30DaysRange() {
     const thirtyDaysAgo = new Date(nowUTC.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     return {
-        startDate: thirtyDaysAgo.toISOString().split('T')[0],
-        endDate: nowUTC.toISOString().split('T')[0],
+        startDate: toDateString(thirtyDaysAgo),
+        endDate: toDateString(nowUTC),
     };
 }
 
@@ -118,7 +150,7 @@ export function getEarliestTransactionDateRange(earliestDate: string) {
 
     return {
         startDate: earliestDate,
-        endDate: nowUTC.toISOString().split('T')[0],
+        endDate: toDateString(nowUTC),
     };
 }
 

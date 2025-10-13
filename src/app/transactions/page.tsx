@@ -65,6 +65,7 @@ import {
   getCurrentYearRange,
   getLast30DaysRange,
   getEarliestTransactionDateRange,
+  toDateString,
 } from "@/lib/utils";
 import {
   processCategoryData,
@@ -203,7 +204,7 @@ export default function TransactionsPage() {
       sortBy: "date",
       sortOrder: "desc",
       ...getCurrentYearRange(),
-      endDate: today.toISOString().split("T")[0],
+      endDate: toDateString(today),
     };
   });
 
@@ -255,13 +256,13 @@ export default function TransactionsPage() {
       };
 
       // Debug logging
-      console.log("Chart data processed:", {
-        allTransactionsCount: allTransactions.length,
-        paginatedTransactionsCount: transactions.length,
-        categoryDataCount: processedData.categoryData.length,
-        timeSeriesDataCount: processedData.timeSeriesData.length,
-        creditCardMetrics: processedData.creditCardMetrics,
-      });
+      // console.log("Chart data processed:", {
+      //   allTransactionsCount: allTransactions.length,
+      //   paginatedTransactionsCount: transactions.length,
+      //   categoryDataCount: processedData.categoryData.length,
+      //   timeSeriesDataCount: processedData.timeSeriesData.length,
+      //   creditCardMetrics: processedData.creditCardMetrics,
+      // });
 
       return processedData;
     } catch (error) {
@@ -371,7 +372,7 @@ export default function TransactionsPage() {
       // Create minimal filters to find the earliest transaction
       const earlyFilters: TransactionFilters = {
         startDate: "2020-01-01", // Start from a very early date
-        endDate: today.toISOString().split("T")[0],
+        endDate: toDateString(today),
         limit: 1,
         offset: 0,
         sortBy: "date" as const,
@@ -474,6 +475,17 @@ export default function TransactionsPage() {
     []
   );
 
+  const handleDateChange = useCallback(
+    (key: keyof TransactionFilters, value: string) => {
+      setFilters((prev) => ({
+        ...prev,
+        [key]: value,
+        offset: 0,
+      }));
+    },
+    []
+  );
+
   // Pagination handler
   const handlePageChange = useCallback((newOffset: number) => {
     setFilters((prev) => ({
@@ -508,7 +520,7 @@ export default function TransactionsPage() {
       sortBy: "date",
       sortOrder: "desc",
       startDate: earliestTransactionDate || getCurrentYearRange().startDate,
-      endDate: today.toISOString().split("T")[0],
+      endDate: toDateString(today),
     });
     setSearchTerm("");
   }, [earliestTransactionDate]);
@@ -694,19 +706,17 @@ export default function TransactionsPage() {
                 <Input
                   type="date"
                   placeholder="Start Date"
-                  value={filters.startDate || ""}
+                  value={filters.startDate?.split("T")[0] || ""}
                   onChange={(e) =>
-                    handleFilterChange("startDate", e.target.value)
+                    handleDateChange("startDate", e.target.value)
                   }
                   className="rounded-xl"
                 />
                 <Input
                   type="date"
                   placeholder="End Date"
-                  value={filters.endDate || ""}
-                  onChange={(e) =>
-                    handleFilterChange("endDate", e.target.value)
-                  }
+                  value={filters.endDate?.split("T")[0] || ""}
+                  onChange={(e) => handleDateChange("endDate", e.target.value)}
                   className="rounded-xl"
                 />
                 <Select
