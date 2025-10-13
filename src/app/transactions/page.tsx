@@ -208,6 +208,25 @@ export default function TransactionsPage() {
     };
   });
 
+  // Pending filter state for changes that haven't been applied yet
+  const [pendingFilters, setPendingFilters] = useState<TransactionFilters>(
+    () => {
+      const now = new Date();
+      const today = new Date(
+        Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+      );
+
+      return {
+        limit: 50,
+        offset: 0,
+        sortBy: "date",
+        sortOrder: "desc",
+        ...getCurrentYearRange(),
+        endDate: toDateString(today),
+      };
+    }
+  );
+
   // Pagination state
   const [pagination, setPagination] = useState({
     total: 0,
@@ -326,9 +345,9 @@ export default function TransactionsPage() {
     return Array.from(uniqueCategories).sort();
   }, [availableCategories, chartData.categoryData]);
 
-  // Update filters when search term changes
+  // Update pending filters when search term changes
   useEffect(() => {
-    setFilters((prev) => ({
+    setPendingFilters((prev) => ({
       ...prev,
       search: debouncedSearchTerm.trim() || undefined,
       offset: 0,
@@ -348,11 +367,14 @@ export default function TransactionsPage() {
       // Update filters with the earliest date if we got one and it's different
       setFilters((prev) => {
         if (prev.startDate !== earliestDate) {
-          return {
+          const updatedFilters = {
             ...prev,
             startDate: earliestDate,
             offset: 0, // Reset pagination when changing date range
           };
+          // Also update pending filters to keep them in sync
+          setPendingFilters(updatedFilters);
+          return updatedFilters;
         }
         return prev;
       });
@@ -463,10 +485,10 @@ export default function TransactionsPage() {
     }
   }, [loadData]);
 
-  // Filter change handler
+  // Filter change handler - now updates pending filters
   const handleFilterChange = useCallback(
     (key: keyof TransactionFilters, value: string | number) => {
-      setFilters((prev) => ({
+      setPendingFilters((prev) => ({
         ...prev,
         [key]: value,
         offset: 0,
@@ -477,7 +499,7 @@ export default function TransactionsPage() {
 
   const handleDateChange = useCallback(
     (key: keyof TransactionFilters, value: string) => {
-      setFilters((prev) => ({
+      setPendingFilters((prev) => ({
         ...prev,
         [key]: value,
         offset: 0,
@@ -497,7 +519,7 @@ export default function TransactionsPage() {
   // Quick date filter handlers
   const handleQuickDateFilter = useCallback(
     (range: { startDate: string; endDate: string }) => {
-      setFilters((prev) => ({
+      setPendingFilters((prev) => ({
         ...prev,
         startDate: range.startDate,
         endDate: range.endDate,
@@ -514,16 +536,24 @@ export default function TransactionsPage() {
       Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
     );
 
-    setFilters({
+    const resetFilters: TransactionFilters = {
       limit: 50,
       offset: 0,
-      sortBy: "date",
-      sortOrder: "desc",
+      sortBy: "date" as const,
+      sortOrder: "desc" as const,
       startDate: earliestTransactionDate || getCurrentYearRange().startDate,
       endDate: toDateString(today),
-    });
+    };
+
+    setFilters(resetFilters);
+    setPendingFilters(resetFilters);
     setSearchTerm("");
   }, [earliestTransactionDate]);
+
+  // Apply pending filters
+  const applyFilters = useCallback(() => {
+    setFilters(pendingFilters);
+  }, [pendingFilters]);
 
   // Use transactions directly from backend
   const filteredTransactions = transactions;
@@ -702,54 +732,74 @@ export default function TransactionsPage() {
 
             {/* Advanced Filters */}
             {showFilters && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
-                <Input
-                  type="date"
-                  placeholder="Start Date"
-                  value={filters.startDate?.split("T")[0] || ""}
-                  onChange={(e) =>
-                    handleDateChange("startDate", e.target.value)
-                  }
-                  className="rounded-xl"
-                />
-                <Input
-                  type="date"
-                  placeholder="End Date"
-                  value={filters.endDate?.split("T")[0] || ""}
-                  onChange={(e) => handleDateChange("endDate", e.target.value)}
-                  className="rounded-xl"
-                />
-                <Select
-                  value={filters.category || "all"}
-                  onValueChange={(value) =>
-                    handleFilterChange("category", value === "all" ? "" : value)
-                  }
-                >
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Categories</SelectItem>
-                    {categoryOptions.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Select
-                  value={filters.status || "all"}
-                  onValueChange={(value) => handleFilterChange("status", value)}
-                >
-                  <SelectTrigger className="rounded-xl">
-                    <SelectValue placeholder="Status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="pending">Pending</SelectItem>
-                  </SelectContent>
-                </Select>
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Input
+                    type="date"
+                    placeholder="Start Date"
+                    value={pendingFilters.startDate?.split("T")[0] || ""}
+                    onChange={(e) =>
+                      handleDateChange("startDate", e.target.value)
+                    }
+                    className="rounded-xl"
+                  />
+                  <Input
+                    type="date"
+                    placeholder="End Date"
+                    value={pendingFilters.endDate?.split("T")[0] || ""}
+                    onChange={(e) =>
+                      handleDateChange("endDate", e.target.value)
+                    }
+                    className="rounded-xl"
+                  />
+                  <Select
+                    value={pendingFilters.category || "all"}
+                    onValueChange={(value) =>
+                      handleFilterChange(
+                        "category",
+                        value === "all" ? "" : value
+                      )
+                    }
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categoryOptions.map((category) => (
+                        <SelectItem key={category} value={category}>
+                          {category}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={pendingFilters.status || "all"}
+                    onValueChange={(value) =>
+                      handleFilterChange("status", value)
+                    }
+                  >
+                    <SelectTrigger className="rounded-xl">
+                      <SelectValue placeholder="Status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Status</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Apply Filters Button */}
+                <div className="flex justify-end">
+                  <Button
+                    onClick={applyFilters}
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    <Filter className="h-4 w-4" />
+                    Apply Filters
+                  </Button>
+                </div>
               </div>
             )}
 
@@ -758,17 +808,17 @@ export default function TransactionsPage() {
               filters.endDate ||
               filters.category ||
               filters.status ||
-              searchTerm) && (
+              filters.search) && (
               <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Active Filters:
                 </span>
-                {searchTerm && (
+                {filters.search && (
                   <Badge
                     variant="secondary"
                     className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
                   >
-                    Search: {searchTerm}
+                    Search: {filters.search}
                   </Badge>
                 )}
                 {filters.startDate && (
