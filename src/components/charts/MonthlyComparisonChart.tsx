@@ -5,43 +5,41 @@ import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
+  BarElement,
   Title,
   Tooltip,
   Legend,
-  Filler,
   ChartOptions,
 } from "chart.js";
-import { TimeSeriesData } from "@/types";
+import { MonthlySpendingData } from "@/types";
 import {
   CHART_COLORS,
   getCommonChartOptions,
   getThemeColors,
 } from "@/lib/chartConfig";
 import { useTheme } from "@/hooks/useTheme";
-import { BarChart } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 
 ChartJS.register(
   CategoryScale,
   LinearScale,
-  PointElement,
-  LineElement,
+  BarElement,
   Title,
   Tooltip,
-  Legend,
-  Filler
+  Legend
 );
 
-interface SpendingLineChartProps {
-  data: TimeSeriesData[];
+interface MonthlyComparisonChartProps {
+  data: MonthlySpendingData[];
   title?: string;
+  comparisonType?: "MoM" | "YoY" | "Budget";
 }
 
-export default function SpendingLineChart({
+export default function MonthlyComparisonChart({
   data,
-  title = "Spending Over Time",
-}: SpendingLineChartProps) {
+  title = "Monthly Spending Comparison",
+  comparisonType = "YoY",
+}: MonthlyComparisonChartProps) {
   const isDark = useTheme();
 
   // Handle undefined or null data
@@ -60,23 +58,19 @@ export default function SpendingLineChart({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
               />
             </svg>
           </div>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
-            No data available
+            No comparison data available
           </p>
         </div>
       </div>
     );
   }
 
-  // Ensure data is valid and has positive amounts
-  const validData = data.filter(
-    (item) =>
-      item && item.date && typeof item.amount === "number" && item.amount >= 0
-  );
+  const validData = data.filter((item) => item && item.month);
 
   if (validData.length === 0) {
     return (
@@ -93,41 +87,68 @@ export default function SpendingLineChart({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 strokeWidth={2}
-                d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
               />
             </svg>
           </div>
           <p className="text-gray-500 dark:text-gray-400 text-sm">
-            No valid data available
+            No valid comparison data available
           </p>
         </div>
       </div>
     );
   }
 
+  const labels = validData.map((item) => item.month);
+
+  const datasets = [];
+
+  // Current year/period data
+  datasets.push({
+    label: comparisonType === "Budget" ? "Actual Spending" : "Current Year",
+    data: validData.map((item) => Math.abs(item.currentYear)),
+    backgroundColor: isDark
+      ? CHART_COLORS.semantic.expense + "40"
+      : CHART_COLORS.semantic.expense + "20",
+    borderColor: CHART_COLORS.semantic.expense,
+    borderWidth: 2,
+    borderRadius: 6,
+    borderSkipped: false,
+  });
+
+  // Comparison data
+  if (
+    comparisonType === "Budget" &&
+    validData.some((item) => item.budgetAmount)
+  ) {
+    datasets.push({
+      label: "Budget",
+      data: validData.map((item) => item.budgetAmount || 0),
+      backgroundColor: isDark
+        ? CHART_COLORS.semantic.budget + "40"
+        : CHART_COLORS.semantic.budget + "20",
+      borderColor: CHART_COLORS.semantic.budget,
+      borderWidth: 2,
+      borderRadius: 6,
+      borderSkipped: false,
+    });
+  } else {
+    datasets.push({
+      label: "Previous Year",
+      data: validData.map((item) => Math.abs(item.previousYear)),
+      backgroundColor: isDark
+        ? CHART_COLORS.semantic.income + "40"
+        : CHART_COLORS.semantic.income + "20",
+      borderColor: CHART_COLORS.semantic.income,
+      borderWidth: 2,
+      borderRadius: 6,
+      borderSkipped: false,
+    });
+  }
+
   const chartData = {
-    labels: validData.map((item) => item.date),
-    datasets: [
-      {
-        label: "Daily Spending",
-        data: validData.map((item) => Math.abs(item.amount)),
-        borderColor: CHART_COLORS.semantic.expense,
-        backgroundColor: isDark
-          ? CHART_COLORS.semantic.expense + "20"
-          : CHART_COLORS.semantic.expense + "10",
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: CHART_COLORS.semantic.expense,
-        pointBorderColor: isDark ? "#1F2937" : "#FFFFFF",
-        pointBorderWidth: 3,
-        pointRadius: 6,
-        pointHoverRadius: 8,
-        pointHoverBackgroundColor: CHART_COLORS.semantic.expense,
-        pointHoverBorderColor: isDark ? "#374151" : "#F3F4F6",
-        pointHoverBorderWidth: 4,
-      },
-    ],
+    labels,
+    datasets,
   };
 
   const options: ChartOptions<"bar"> = {
@@ -152,9 +173,26 @@ export default function SpendingLineChart({
         ...getCommonChartOptions(isDark).plugins?.tooltip,
         callbacks: {
           label: function (context: any) {
-            const label = context.label || "";
-            const value = context.parsed;
-            return `${label}: $${value.toFixed(2)}`;
+            const label = context.dataset.label || "";
+            const value = context.parsed.y;
+            const change =
+              comparisonType === "Budget"
+                ? ""
+                : validData[context.dataIndex]?.currentYear &&
+                  validData[context.dataIndex]?.previousYear
+                ? ` (${
+                    validData[context.dataIndex].currentYear >
+                    validData[context.dataIndex].previousYear
+                      ? "+"
+                      : ""
+                  }${(
+                    ((validData[context.dataIndex].currentYear -
+                      validData[context.dataIndex].previousYear) /
+                      validData[context.dataIndex].previousYear) *
+                    100
+                  ).toFixed(1)}%)`
+                : "";
+            return `${label}: ${formatCurrency(value)}${change}`;
           },
         },
       },
@@ -190,13 +228,17 @@ export default function SpendingLineChart({
           },
           padding: 8,
           callback: function (value: any) {
-            return `$${value.toFixed(0)}`;
+            return formatCurrency(value);
           },
         },
         border: {
           display: false,
         },
       },
+    },
+    interaction: {
+      intersect: false,
+      mode: "index",
     },
   };
 
@@ -206,3 +248,4 @@ export default function SpendingLineChart({
     </div>
   );
 }
+
