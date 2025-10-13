@@ -137,8 +137,10 @@ export default function CategoryBarChart({
         callbacks: {
           label: function (context: any) {
             const label = context.label || "";
-            const value = context.parsed;
-            return `${label}: $${value.toFixed(2)}`;
+            const value = context.parsed.y || context.parsed || 0;
+            return `${label}: $${
+              typeof value === "number" ? value.toFixed(2) : "0.00"
+            }`;
           },
         },
       },
@@ -176,7 +178,7 @@ export default function CategoryBarChart({
           },
           padding: 8,
           callback: function (value: any) {
-            return `$${value.toFixed(0)}`;
+            return `$${typeof value === "number" ? value.toFixed(0) : "0"}`;
           },
         },
         border: {

@@ -8,6 +8,12 @@ import {
     TransactionFilters,
     CategoryData,
     CategoryStats,
+    Budget,
+    BudgetProgress,
+    BudgetAlert,
+    BudgetSummary,
+    CreateBudgetRequest,
+    BudgetFilters,
 } from '@/types';
 import { buildTransactionParams } from '@/lib/utils';
 
@@ -106,6 +112,91 @@ export const plaidApi = {
         failed: number;
     }> => {
         const response = await api.delete(`/api/plaid/accounts/unlink?accountIds=${accountIds.join(',')}`);
+        return response.data;
+    },
+};
+
+export const budgetApi = {
+    // Get all budgets
+    getBudgets: async (filters?: BudgetFilters): Promise<Budget[]> => {
+        const params = new URLSearchParams();
+        if (filters?.budgetType) params.append('budgetType', filters.budgetType);
+        if (filters?.isActive !== undefined) params.append('isActive', filters.isActive.toString());
+        if (filters?.accountId) params.append('accountId', filters.accountId);
+
+        const response = await api.get<Budget[]>(`/api/budgets?${params.toString()}`);
+        return response.data;
+    },
+
+    // Get specific budget by ID
+    getBudget: async (budgetId: string): Promise<Budget> => {
+        const response = await api.get<Budget>(`/api/budgets/${budgetId}`);
+        return response.data;
+    },
+
+    // Create new budget
+    createBudget: async (budgetData: CreateBudgetRequest): Promise<Budget> => {
+        const response = await api.post<Budget>('/api/budgets', budgetData);
+        return response.data;
+    },
+
+    // Update existing budget
+    updateBudget: async (budgetId: string, updates: Partial<CreateBudgetRequest>): Promise<Budget> => {
+        const response = await api.put<Budget>(`/api/budgets/${budgetId}`, updates);
+        return response.data;
+    },
+
+    // Delete budget
+    deleteBudget: async (budgetId: string): Promise<{ success: boolean }> => {
+        const response = await api.delete<{ success: boolean }>(`/api/budgets/${budgetId}`);
+        return response.data;
+    },
+
+    // Get budget progress for specific budget
+    getBudgetProgress: async (budgetId: string): Promise<BudgetProgress> => {
+        const response = await api.get<BudgetProgress>(`/api/budgets/${budgetId}/progress`);
+        return response.data;
+    },
+
+    // Get progress for all budgets
+    getAllBudgetProgress: async (): Promise<BudgetProgress[]> => {
+        const response = await api.get<BudgetProgress[]>('/api/budgets/progress');
+        return response.data;
+    },
+
+    // Get budget summary statistics
+    getBudgetSummary: async (): Promise<BudgetSummary> => {
+        const response = await api.get<BudgetSummary>('/api/budgets/summary');
+        return response.data;
+    },
+
+    // Get unread budget alerts
+    getBudgetAlerts: async (): Promise<BudgetAlert[]> => {
+        const response = await api.get<BudgetAlert[]>('/api/budgets/alerts');
+        return response.data;
+    },
+
+    // Mark alert as read
+    markAlertAsRead: async (alertId: string): Promise<{ success: boolean }> => {
+        const response = await api.post<{ success: boolean }>(`/api/budgets/alerts/${alertId}`);
+        return response.data;
+    },
+
+    // Check budget alerts manually (triggers email notifications)
+    checkBudgetAlerts: async (userEmail?: string, userName?: string): Promise<{ success: boolean; alerts: BudgetAlert[]; message: string }> => {
+        const response = await api.post<{ success: boolean; alerts: BudgetAlert[]; message: string }>('/api/budgets/alerts/check', {
+            userEmail,
+            userName
+        });
+        return response.data;
+    },
+
+    // Send weekly budget summary
+    sendWeeklySummary: async (userEmail?: string, userName?: string): Promise<{ success: boolean; message: string }> => {
+        const response = await api.post<{ success: boolean; message: string }>('/api/budgets/summary/weekly', {
+            userEmail,
+            userName
+        });
         return response.data;
     },
 };

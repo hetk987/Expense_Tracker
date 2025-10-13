@@ -19,7 +19,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import CategoryPieChart from "@/components/charts/CategoryPieChart";
 import CategoryBarChart from "@/components/charts/CategoryBarChart";
-import SpendingLineChart from "@/components/charts/SpendingLineChart";
 import ChartErrorBoundary from "@/components/charts/ChartErrorBoundary";
 import {
   CreditCard,
@@ -65,6 +64,7 @@ import {
   getCurrentMonthRange,
   getCurrentYearRange,
   getLast30DaysRange,
+  getEarliestTransactionDateRange,
 } from "@/lib/utils";
 import {
   processCategoryData,
@@ -86,6 +86,7 @@ import { TransactionSkeleton } from "@/components/ui/skeleton";
 import EmptyState from "@/components/ui/empty-state";
 import { useDebounce } from "@/hooks/useDebounce";
 import Image from "next/image";
+import SpendingBarChart from "@/components/charts/SpendingBarChart";
 
 // Chart error boundary is now imported from components
 
@@ -165,6 +166,9 @@ const TransactionIcon = ({
 export default function TransactionsPage() {
   // Core data state
   const [transactions, setTransactions] = useState<PlaidTransaction[]>([]);
+  const [allTransactions, setAllTransactions] = useState<PlaidTransaction[]>(
+    []
+  );
   const [accounts, setAccounts] = useState<PlaidAccount[]>([]);
   const [availableCategories, setAvailableCategories] = useState<
     CategoryStats[]
@@ -182,14 +186,25 @@ export default function TransactionsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [chartLoading, setChartLoading] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
+  const [earliestTransactionDate, setEarliestTransactionDate] = useState<
+    string | null
+  >(null);
 
   // Unified filter state
-  const [filters, setFilters] = useState<TransactionFilters>({
-    limit: 50,
-    offset: 0,
-    sortBy: "date",
-    sortOrder: "desc",
-    ...getCurrentYearRange(),
+  const [filters, setFilters] = useState<TransactionFilters>(() => {
+    const now = new Date();
+    const today = new Date(
+      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+    );
+
+    return {
+      limit: 50,
+      offset: 0,
+      sortBy: "date",
+      sortOrder: "desc",
+      ...getCurrentYearRange(),
+      endDate: today.toISOString().split("T")[0],
+    };
   });
 
   // Pagination state
@@ -230,10 +245,10 @@ export default function TransactionsPage() {
   const chartData = useMemo(() => {
     try {
       const processedData = {
-        creditCardMetrics: calculateCreditCardMetrics(transactions),
-        categoryData: processCategoryData(transactions),
+        creditCardMetrics: calculateCreditCardMetrics(allTransactions),
+        categoryData: processCategoryData(allTransactions),
         timeSeriesData: processTimeSeriesData(
-          transactions,
+          allTransactions,
           filters.startDate || getCurrentYearRange().startDate,
           filters.endDate || getCurrentYearRange().endDate
         ),
@@ -241,7 +256,8 @@ export default function TransactionsPage() {
 
       // Debug logging
       console.log("Chart data processed:", {
-        transactionsCount: transactions.length,
+        allTransactionsCount: allTransactions.length,
+        paginatedTransactionsCount: transactions.length,
         categoryDataCount: processedData.categoryData.length,
         timeSeriesDataCount: processedData.timeSeriesData.length,
         creditCardMetrics: processedData.creditCardMetrics,
@@ -261,7 +277,7 @@ export default function TransactionsPage() {
         timeSeriesData: [],
       };
     }
-  }, [transactions, filters.startDate, filters.endDate]);
+  }, [allTransactions, filters.startDate, filters.endDate]);
 
   // Enhanced data validation helper
   const validateChartData = (data: any) => {
@@ -323,12 +339,89 @@ export default function TransactionsPage() {
     loadData();
   }, [filters]);
 
-  // Optimized data loading
+  // Initialize earliest transaction date on component mount
+  useEffect(() => {
+    const initializeEarliestDate = async () => {
+      const earliestDate = await getEarliestTransactionDate();
+
+      // Update filters with the earliest date if we got one and it's different
+      setFilters((prev) => {
+        if (prev.startDate !== earliestDate) {
+          return {
+            ...prev,
+            startDate: earliestDate,
+            offset: 0, // Reset pagination when changing date range
+          };
+        }
+        return prev;
+      });
+    };
+
+    initializeEarliestDate();
+  }, []); // Only run once on mount
+
+  // Get earliest transaction date
+  const getEarliestTransactionDate = useCallback(async () => {
+    try {
+      const now = new Date();
+      const today = new Date(
+        Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+      );
+
+      // Create minimal filters to find the earliest transaction
+      const earlyFilters: TransactionFilters = {
+        startDate: "2020-01-01", // Start from a very early date
+        endDate: today.toISOString().split("T")[0],
+        limit: 1,
+        offset: 0,
+        sortBy: "date" as const,
+        sortOrder: "asc" as const, // Ascending to get the earliest
+      };
+
+      const dashboardData = await plaidApi.getDashboardData(earlyFilters);
+
+      if (dashboardData.transactions && dashboardData.transactions.length > 0) {
+        const earliestDate = dashboardData.transactions[0].date;
+        setEarliestTransactionDate(earliestDate);
+        return earliestDate;
+      }
+
+      // Fallback to current year start if no transactions found
+      return getCurrentYearRange().startDate;
+    } catch (error) {
+      console.error("Error getting earliest transaction date:", error);
+      // Fallback to current year start on error
+      return getCurrentYearRange().startDate;
+    }
+  }, []);
+
+  // Load all transactions for analytics (no pagination)
+  const loadAllTransactions = useCallback(async () => {
+    try {
+      // Create filters for all transactions (no limit/offset)
+      const allTransactionsFilters: TransactionFilters = {
+        ...filters,
+        limit: undefined, // Remove limit to get all transactions
+        offset: undefined, // Remove offset
+      };
+
+      const allData = await plaidApi.getDashboardData(allTransactionsFilters);
+      setAllTransactions(allData.transactions);
+    } catch (error) {
+      console.error("Error loading all transactions for analytics:", error);
+      // Fallback to using paginated transactions if all transactions fail
+      setAllTransactions(transactions);
+    }
+  }, [filters, transactions]);
+
+  // Optimized data loading for transactions list (paginated)
   const loadData = useCallback(async () => {
     try {
       setError(null);
       setLoading(true);
       setChartLoading(true);
+
+      // Load paginated transactions for the list
       const dashboardData = await plaidApi.getDashboardData(filters);
 
       setTransactions(dashboardData.transactions);
@@ -336,6 +429,9 @@ export default function TransactionsPage() {
       setAvailableCategories(dashboardData.categories);
       setAccounts(dashboardData.accounts);
       setPagination(dashboardData.pagination);
+
+      // Also load all transactions for charts
+      await loadAllTransactions();
     } catch (error) {
       console.error("Error loading dashboard data:", error);
       setError(
@@ -345,7 +441,7 @@ export default function TransactionsPage() {
       setLoading(false);
       setChartLoading(false);
     }
-  }, [filters]);
+  }, [filters, loadAllTransactions]);
 
   // Optimized sync function
   const handleSyncTransactions = useCallback(async () => {
@@ -399,17 +495,23 @@ export default function TransactionsPage() {
     []
   );
 
-  // Clear all filters
+  // Clear all filters and reset to earliest transaction date
   const clearFilters = useCallback(() => {
+    const now = new Date();
+    const today = new Date(
+      Date.UTC(now.getFullYear(), now.getMonth(), now.getDate())
+    );
+
     setFilters({
       limit: 50,
       offset: 0,
       sortBy: "date",
       sortOrder: "desc",
-      ...getCurrentYearRange(),
+      startDate: earliestTransactionDate || getCurrentYearRange().startDate,
+      endDate: today.toISOString().split("T")[0],
     });
     setSearchTerm("");
-  }, []);
+  }, [earliestTransactionDate]);
 
   // Use transactions directly from backend
   const filteredTransactions = transactions;
@@ -541,29 +643,17 @@ export default function TransactionsPage() {
             </Card>
           </div>
 
-          {/* Enhanced Search and Filters */}
-          <div className="mb-6">
-            <div className="flex gap-4 items-center">
-              <div className="relative flex-1 max-w-md">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <Input
-                  placeholder="Search transactions, merchants, or categories..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-10 rounded-xl"
-                />
-                {searchTerm && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
-                    onClick={() => setSearchTerm("")}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
+          {/* Enhanced Search and Filters - Shared between tabs */}
+          <Card className="p-6 border-0 shadow-apple-lg mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Filters
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Filter data to analyze specific time periods and categories
+                </p>
               </div>
-
               <div className="flex gap-2">
                 <Button
                   variant="outline"
@@ -572,42 +662,148 @@ export default function TransactionsPage() {
                   className="gap-2"
                 >
                   <Filter className="h-4 w-4" />
-                  Filters
+                  {showFilters ? "Hide" : "Show"} Advanced
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="gap-2">
-                      <Calendar className="h-4 w-4" />
-                      Quick Filters
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        handleQuickDateFilter(getLast30DaysRange())
-                      }
-                    >
-                      Last 30 Days
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        handleQuickDateFilter(getCurrentMonthRange())
-                      }
-                    >
-                      This Month
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        handleQuickDateFilter(getCurrentYearRange())
-                      }
-                    >
-                      This Year
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
               </div>
             </div>
-          </div>
+
+            {/* Search Bar */}
+            <div className="relative flex-1 mb-4">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+              <Input
+                placeholder="Search transactions, merchants, or categories..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-10 rounded-xl"
+              />
+              {searchTerm && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
+                  onClick={() => setSearchTerm("")}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+
+            {/* Advanced Filters */}
+            {showFilters && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                <Input
+                  type="date"
+                  placeholder="Start Date"
+                  value={filters.startDate || ""}
+                  onChange={(e) =>
+                    handleFilterChange("startDate", e.target.value)
+                  }
+                  className="rounded-xl"
+                />
+                <Input
+                  type="date"
+                  placeholder="End Date"
+                  value={filters.endDate || ""}
+                  onChange={(e) =>
+                    handleFilterChange("endDate", e.target.value)
+                  }
+                  className="rounded-xl"
+                />
+                <Select
+                  value={filters.category || "all"}
+                  onValueChange={(value) =>
+                    handleFilterChange("category", value === "all" ? "" : value)
+                  }
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Categories</SelectItem>
+                    {categoryOptions.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select
+                  value={filters.status || "all"}
+                  onValueChange={(value) => handleFilterChange("status", value)}
+                >
+                  <SelectTrigger className="rounded-xl">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Active Filters Display */}
+            {(filters.startDate ||
+              filters.endDate ||
+              filters.category ||
+              filters.status ||
+              searchTerm) && (
+              <div className="flex items-center gap-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Active Filters:
+                </span>
+                {searchTerm && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    Search: {searchTerm}
+                  </Badge>
+                )}
+                {filters.startDate && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    From: {formatDate(filters.startDate)}
+                  </Badge>
+                )}
+                {filters.endDate && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    To: {formatDate(filters.endDate)}
+                  </Badge>
+                )}
+                {filters.category && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    Category: {filters.category}
+                  </Badge>
+                )}
+                {filters.status && filters.status !== "all" && (
+                  <Badge
+                    variant="secondary"
+                    className="text-xs bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    Status: {filters.status}
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearFilters}
+                  className="text-xs h-6 px-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100"
+                >
+                  Clear All
+                </Button>
+              </div>
+            )}
+          </Card>
 
           {/* Tabbed Interface */}
           <Tabs
@@ -615,104 +811,25 @@ export default function TransactionsPage() {
             onValueChange={setActiveTab}
             className="w-full"
           >
-            <TabsList className="grid w-full grid-cols-3 mb-6 bg-gray-100 dark:bg-gray-800 rounded-xl p-1">
+            <TabsList className="grid w-full h-full grid-cols-2 mb-6 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 rounded-xl shadow-sm border border-gray-200 dark:border-gray-600">
               <TabsTrigger
                 value="transactions"
-                className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
+                className="flex w-full h-full items-center rounded-xl justify-center gap-2 font-medium transition-all duration-200 text-gray-600 dark:text-white hover:text-gray-900 dark:hover:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-blue-50 data-[state=active]:to-blue-100 dark:data-[state=active]:from-blue-900/30 dark:data-[state=active]:to-blue-800/30 data-[state=active]:text-blue-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm"
               >
                 <CreditCard className="h-4 w-4" />
                 Transactions
               </TabsTrigger>
               <TabsTrigger
                 value="analytics"
-                className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
+                className="flex w-full h-full items-center rounded-xl justify-center gap-2 font-medium transition-all duration-200 text-gray-600 dark:text-white hover:text-gray-900 dark:hover:text-white data-[state=active]:bg-gradient-to-r data-[state=active]:from-green-50 data-[state=active]:to-green-100 dark:data-[state=active]:from-green-900/30 dark:data-[state=active]:to-green-800/30 data-[state=active]:text-green-700 dark:data-[state=active]:text-white data-[state=active]:shadow-sm"
               >
                 <BarChart3 className="h-4 w-4" />
                 Analytics
-              </TabsTrigger>
-              <TabsTrigger
-                value="insights"
-                className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white dark:data-[state=active]:bg-gray-700"
-              >
-                <Sparkles className="h-4 w-4" />
-                Insights
               </TabsTrigger>
             </TabsList>
 
             {/* Transactions Tab */}
             <TabsContent value="transactions" className="space-y-6">
-              {/* Filters */}
-              {showFilters && (
-                <Card className="p-6 border-0 shadow-apple-lg">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Input
-                      type="date"
-                      placeholder="Start Date"
-                      value={filters.startDate || ""}
-                      onChange={(e) =>
-                        handleFilterChange("startDate", e.target.value)
-                      }
-                      className="rounded-xl"
-                    />
-                    <Input
-                      type="date"
-                      placeholder="End Date"
-                      value={filters.endDate || ""}
-                      onChange={(e) =>
-                        handleFilterChange("endDate", e.target.value)
-                      }
-                      className="rounded-xl"
-                    />
-                    <Select
-                      value={filters.category || "all"}
-                      onValueChange={(value) =>
-                        handleFilterChange(
-                          "category",
-                          value === "all" ? "" : value
-                        )
-                      }
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Category" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Categories</SelectItem>
-                        {categoryOptions.map((category) => (
-                          <SelectItem key={category} value={category}>
-                            {category}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Select
-                      value={filters.status || "all"}
-                      onValueChange={(value) =>
-                        handleFilterChange("status", value)
-                      }
-                    >
-                      <SelectTrigger className="rounded-xl">
-                        <SelectValue placeholder="Status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex gap-2 mt-4">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={clearFilters}
-                      className="rounded-lg"
-                    >
-                      Clear All
-                    </Button>
-                  </div>
-                </Card>
-              )}
-
               {/* Transactions List */}
               <Card className="border-0 shadow-apple-lg">
                 <CardHeader>
@@ -830,31 +947,6 @@ export default function TransactionsPage() {
                               </div>
                             </div>
                           </div>
-
-                          {/* Hover actions */}
-                          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="rounded-lg"
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent>
-                                <DropdownMenuItem>
-                                  <Eye className="h-4 w-4 mr-2" />
-                                  View Details
-                                </DropdownMenuItem>
-                                <DropdownMenuItem>
-                                  <Settings className="h-4 w-4 mr-2" />
-                                  Edit Category
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
                         </div>
                       ))}
                     </div>
@@ -923,7 +1015,8 @@ export default function TransactionsPage() {
               {process.env.NODE_ENV === "development" && (
                 <Card className="p-4 border-0 bg-yellow-50 dark:bg-yellow-900/20">
                   <div className="text-sm text-yellow-800 dark:text-yellow-200">
-                    <strong>Debug Info:</strong> Transactions:{" "}
+                    <strong>Debug Info:</strong> All Transactions:{" "}
+                    {allTransactions.length}, Paginated Transactions:{" "}
                     {transactions.length}, Categories:{" "}
                     {chartData.categoryData.length}, Time Series:{" "}
                     {chartData.timeSeriesData.length}
@@ -995,7 +1088,7 @@ export default function TransactionsPage() {
                             </div>
                           }
                         >
-                          <SpendingLineChart
+                          <SpendingBarChart
                             data={chartData.timeSeriesData}
                             title=""
                           />
@@ -1096,151 +1189,7 @@ export default function TransactionsPage() {
                     </div>
                   </Card>
                 </div>
-
-                {/* Additional Analytics Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <Card className="p-6 border-0 shadow-apple-lg">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
-                        <TrendingUp className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                          Total Spending
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          This period
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-                      {formatCurrency(
-                        chartData.creditCardMetrics.totalSpending
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      {chartData.creditCardMetrics.transactionCount}{" "}
-                      transactions
-                    </p>
-                  </Card>
-
-                  <Card className="p-6 border-0 shadow-apple-lg">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-xl flex items-center justify-center">
-                        <Target className="h-5 w-5 text-green-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                          Average Transaction
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Per transaction
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-                      {formatCurrency(
-                        chartData.creditCardMetrics.averageTransaction
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      Based on {chartData.creditCardMetrics.transactionCount}{" "}
-                      transactions
-                    </p>
-                  </Card>
-
-                  <Card className="p-6 border-0 shadow-apple-lg">
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
-                        <Activity className="h-5 w-5 text-purple-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-semibold text-gray-900 dark:text-white">
-                          Largest Transaction
-                        </h3>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Single transaction
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
-                      {formatCurrency(
-                        chartData.creditCardMetrics.largestTransaction
-                      )}
-                    </div>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                      Highest single expense
-                    </p>
-                  </Card>
-                </div>
               </ChartErrorBoundary>
-            </TabsContent>
-
-            {/* Insights Tab */}
-            <TabsContent value="insights" className="space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <Card className="p-6 border-0 shadow-apple-lg">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/20 rounded-xl flex items-center justify-center">
-                      <TrendingUpIcon className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        Spending Trend
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        This month vs last month
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-2xl font-bold text-green-600">
-                    +12.5%
-                  </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Your spending increased by 12.5%
-                  </p>
-                </Card>
-
-                <Card className="p-6 border-0 shadow-apple-lg">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/20 rounded-xl flex items-center justify-center">
-                      <Target className="h-5 w-5 text-green-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        Budget Status
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Monthly budget progress
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-2xl font-bold text-green-600">75%</div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    You've used 75% of your budget
-                  </p>
-                </Card>
-
-                <Card className="p-6 border-0 shadow-apple-lg">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-purple-100 dark:bg-purple-900/20 rounded-xl flex items-center justify-center">
-                      <Sparkles className="h-5 w-5 text-purple-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900 dark:text-white">
-                        Smart Insights
-                      </h3>
-                      <p className="text-sm text-gray-500 dark:text-gray-400">
-                        AI-powered recommendations
-                      </p>
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
-                    Consider reducing dining out expenses - you're 20% above
-                    your usual spending in this category.
-                  </div>
-                </Card>
-              </div>
             </TabsContent>
           </Tabs>
         </div>

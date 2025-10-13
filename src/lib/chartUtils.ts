@@ -119,17 +119,16 @@ export function processTimeSeriesData(
 
     // Process transactions
     filteredTransactions.forEach(transaction => {
-        if (transaction.amount < 0) { // Only process expenses
-            const dateKey = format(parseISO(transaction.date), 'yyyy-MM-dd')
-            const current = dateMap.get(dateKey)
+        const dateKey = format(parseISO(transaction.date), 'yyyy-MM-dd')
+        const current = dateMap.get(dateKey)
 
-            if (current) {
-                dateMap.set(dateKey, {
-                    amount: current.amount + Math.abs(transaction.amount),
-                    count: current.count + 1
-                })
-            }
+        if (current) {
+            dateMap.set(dateKey, {
+                amount: current.amount + Math.abs(transaction.amount),
+                count: current.count + 1
+            })
         }
+
     })
 
     // Convert to array and sort by date

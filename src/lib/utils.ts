@@ -78,8 +78,9 @@ export function getMonthName(date: Date): string {
 
 export function getCurrentMonthRange() {
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    // Use UTC to avoid timezone issues
+    const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+    const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0));
 
     return {
         startDate: startOfMonth.toISOString().split('T')[0],
@@ -89,8 +90,9 @@ export function getCurrentMonthRange() {
 
 export function getCurrentYearRange() {
     const now = new Date();
-    const startOfYear = new Date(now.getFullYear(), 0, 1); // January 1st of current year
-    const endOfYear = new Date(now.getFullYear(), 11, 31); // December 31st of current year
+    // Use UTC to avoid timezone issues
+    const startOfYear = new Date(Date.UTC(now.getFullYear(), 0, 1)); // January 1st of current year
+    const endOfYear = new Date(Date.UTC(now.getFullYear(), 11, 31)); // December 31st of current year
 
     return {
         startDate: startOfYear.toISOString().split('T')[0],
@@ -100,11 +102,23 @@ export function getCurrentYearRange() {
 
 export function getLast30DaysRange() {
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    // Use UTC to avoid timezone issues when subtracting days
+    const nowUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    const thirtyDaysAgo = new Date(nowUTC.getTime() - 30 * 24 * 60 * 60 * 1000);
 
     return {
         startDate: thirtyDaysAgo.toISOString().split('T')[0],
-        endDate: now.toISOString().split('T')[0],
+        endDate: nowUTC.toISOString().split('T')[0],
+    };
+}
+
+export function getEarliestTransactionDateRange(earliestDate: string) {
+    const now = new Date();
+    const nowUTC = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+
+    return {
+        startDate: earliestDate,
+        endDate: nowUTC.toISOString().split('T')[0],
     };
 }
 

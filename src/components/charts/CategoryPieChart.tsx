@@ -160,12 +160,14 @@ export default function CategoryPieChart({
         callbacks: {
           label: function (context: any) {
             const label = context.label || "";
-            const value = context.parsed;
+            const value =
+              typeof context.parsed === "number" ? context.parsed : 0;
             const total = context.dataset.data.reduce(
               (a: number, b: number) => a + b,
               0
             );
-            const percentage = ((value / total) * 100).toFixed(1);
+            const percentage =
+              total > 0 ? ((value / total) * 100).toFixed(1) : "0.0";
             return `${label}: $${value.toFixed(2)} (${percentage}%)`;
           },
         },

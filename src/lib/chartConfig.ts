@@ -28,6 +28,7 @@ export const CHART_COLORS = {
     semantic: {
         income: '#34C759',
         expense: '#FF3B30',
+        budget: '#007AFF',
         neutral: '#8E8E93',
     }
 };

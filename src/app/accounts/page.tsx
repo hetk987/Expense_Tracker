@@ -22,7 +22,10 @@ export default function AccountsPage() {
           breadcrumbs={[{ label: "Accounts" }]}
           actions={
             <Button asChild className="gap-2">
-              <Link href="/link-account">
+              <Link
+                href="/link-account"
+                className="flex flex-row items-center gap-2"
+              >
                 <CreditCard className="h-5 w-5" />
                 Link New Account
               </Link>
@@ -46,13 +49,19 @@ export default function AccountsPage() {
               <CardContent>
                 <div className="flex gap-4">
                   <Button asChild className="gap-2">
-                    <Link href="/link-account">
+                    <Link
+                      href="/link-account"
+                      className="flex flex-row items-center gap-2"
+                    >
                       <CreditCard className="h-4 w-4" />
                       Link New Account
                     </Link>
                   </Button>
                   <Button asChild variant="outline" className="gap-2">
-                    <Link href="/transactions">
+                    <Link
+                      href="/transactions"
+                      className="flex flex-row items-center gap-2"
+                    >
                       View Transactions
                       <ArrowRight className="h-4 w-4" />
                     </Link>
@@ -65,7 +74,7 @@ export default function AccountsPage() {
             <AccountManager />
 
             {/* Information Section */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               <Card className="border-0 shadow-apple-lg">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-gray-900 dark:text-white">
@@ -144,7 +153,7 @@ export default function AccountsPage() {
                   </div>
                 </CardContent>
               </Card>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

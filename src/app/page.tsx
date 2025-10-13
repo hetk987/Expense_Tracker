@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import {
   Card,
   CardContent,
@@ -13,7 +12,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import CategoryPieChart from "@/components/charts/CategoryPieChart";
-import SpendingLineChart from "@/components/charts/SpendingLineChart";
+import SpendingBarChart from "@/components/charts/SpendingBarChart";
 import {
   CreditCard,
   TrendingDown,
@@ -52,14 +51,11 @@ import AuthWrapper from "@/components/AuthWrapper";
 import PageHeader from "@/components/ui/page-header";
 import { DashboardSkeleton } from "@/components/ui/skeleton";
 import EmptyState from "@/components/ui/empty-state";
+import BudgetOverview from "@/components/budget/BudgetOverview";
 import Image from "next/image";
 
 export default function Dashboard() {
-  const router = useRouter();
   const [accounts, setAccounts] = useState<PlaidAccount[]>([]);
-  const [recentTransactions, setRecentTransactions] = useState<
-    PlaidTransaction[]
-  >([]);
   const [allTransactions, setAllTransactions] = useState<PlaidTransaction[]>(
     []
   );
@@ -84,8 +80,6 @@ export default function Dashboard() {
 
       setAccounts(dashboardData.accounts);
       setAllTransactions(dashboardData.transactions);
-      // Get recent transactions by slicing the first 10 from sorted results
-      setRecentTransactions(dashboardData.transactions.slice(0, 10));
     } catch (error) {
       console.error("Error loading dashboard data:", error);
     } finally {
@@ -105,46 +99,53 @@ export default function Dashboard() {
     }
   };
 
-  const timeSeriesData = processTimeSeriesData(
-    allTransactions,
-    getCurrentYearRange().startDate,
-    getCurrentYearRange().endDate
-  );
-  const topCategories = showAllCategories
-    ? getAllCategoriesWithCounts(allTransactions)
-    : getTopSpendingCategories(allTransactions);
-  const creditCardMetrics = calculateCreditCardMetrics(allTransactions);
-  const categoryData = showAllCategories
-    ? getAllCategoriesWithCounts(allTransactions)
-    : processCategoryData(allTransactions);
-
   // Get categories from ALL transactions, not filtered ones
   const allCategories = [
     "all",
     ...Array.from(
-      new Set(allTransactions.flatMap((t) => t.category || []).filter(Boolean))
+      new Set(
+        allTransactions
+          .filter((t) => t.amount > 0)
+          .flatMap((t) => t.category || [])
+          .filter(Boolean)
+      )
     ),
   ];
 
   const filteredTransactions =
     selectedCategory === "all"
-      ? allTransactions
+      ? allTransactions.filter((t) => t.amount > 0)
       : allTransactions.filter(
-          (t) => t.category && t.category.includes(selectedCategory)
+          (t) =>
+            t.category && t.category.includes(selectedCategory) && t.amount > 0
         );
-  const chartData = processCategoryData(filteredTransactions);
 
-  const totalSpending = filteredTransactions.reduce(
-    (sum, t) => sum + Math.abs(t.amount),
-    0
+  const timeSeriesData = processTimeSeriesData(
+    filteredTransactions,
+    getCurrentYearRange().startDate,
+    getCurrentYearRange().endDate
   );
+
+  const topCategories = showAllCategories
+    ? getAllCategoriesWithCounts(allTransactions)
+    : getTopSpendingCategories(allTransactions);
+
+  const totalSpending = filteredTransactions
+    .filter((t) => t.amount > 0)
+    .reduce((sum, t) => sum + Math.abs(t.amount), 0);
+
   const averageTransaction =
     filteredTransactions.length > 0
       ? totalSpending / filteredTransactions.length
       : 0;
+
   const largestTransaction =
     filteredTransactions.length > 0
-      ? Math.max(...filteredTransactions.map((t) => Math.abs(t.amount)))
+      ? Math.max(
+          ...filteredTransactions
+            .filter((t) => t.amount > 0)
+            .map((t) => Math.abs(t.amount))
+        )
       : 0;
 
   if (loading) {
@@ -188,7 +189,7 @@ export default function Dashboard() {
           }
         />
 
-        <div className="container mx-auto px-6 py-8">
+        <div className="container mx-auto px-6 py-8 ">
           {/* Smart Category Filter */}
           {allCategories.length > 1 && (
             <div className="mb-8">
@@ -225,33 +226,43 @@ export default function Dashboard() {
                   </Button>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-3">
-                {allCategories.slice(0, 8).map((category) => (
-                  <Button
-                    key={String(category)}
-                    variant={
-                      selectedCategory === category ? "default" : "outline"
-                    }
-                    size="sm"
-                    onClick={() => setSelectedCategory(String(category))}
-                    className={`rounded-full px-4 py-2 transition-all duration-200 ${
-                      selectedCategory === category
-                        ? "bg-primary-600 text-white shadow-lg"
-                        : "hover:bg-gray-50 dark:hover:bg-gray-800"
-                    }`}
-                  >
-                    {category === "all" ? "All Categories" : String(category)}
-                  </Button>
-                ))}
-                {allCategories.length > 8 && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-primary-600"
-                  >
-                    +{allCategories.length - 8} more
-                  </Button>
-                )}
+              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 dark:scrollbar-thumb-gray-600 dark:scrollbar-track-gray-800">
+                {allCategories.map((category) => {
+                  // Calculate dynamic width based on category name length and total categories
+                  const categoryText =
+                    category === "all" ? "All Categories" : String(category);
+                  const textLength = categoryText.length;
+                  const baseWidth = Math.max(textLength * 9 + 24, 80); // 9px per char + 24px for padding
+                  const maxWidth = Math.min(200, baseWidth); // Cap at 200px
+                  const minWidth = allCategories.length > 8 ? 70 : 90; // Smaller min width if many categories
+                  const calculatedWidth = Math.max(
+                    minWidth,
+                    Math.min(maxWidth, textLength * 9 + 24)
+                  );
+
+                  return (
+                    <Button
+                      key={String(category)}
+                      variant={
+                        selectedCategory === category ? "default" : "outline"
+                      }
+                      size="sm"
+                      onClick={() => setSelectedCategory(String(category))}
+                      className={`rounded-full px-3 py-2 transition-all duration-200 whitespace-nowrap flex-shrink-0 ${
+                        selectedCategory === category
+                          ? "bg-primary-600 text-white shadow-lg"
+                          : "hover:bg-gray-50 dark:hover:bg-gray-800"
+                      }`}
+                      style={{
+                        width: `${calculatedWidth}px`,
+                        minWidth: `${minWidth}px`,
+                        maxWidth: `${maxWidth}px`,
+                      }}
+                    >
+                      {categoryText}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -400,10 +411,20 @@ export default function Dashboard() {
               </CardHeader>
               <CardContent>
                 <div className="h-80">
-                  <SpendingLineChart data={timeSeriesData} title="" />
+                  <SpendingBarChart data={timeSeriesData} title="" />
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Budget Overview and Analytics */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <div className="lg:col-span-1">
+              <BudgetOverview />
+            </div>
+            <div className="lg:col-span-2">
+              {/* Additional analytics can go here in future */}
+            </div>
           </div>
 
           {/* Accounts and Recent Transactions */}
