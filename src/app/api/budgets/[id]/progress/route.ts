@@ -6,10 +6,10 @@ const TEMP_USER_ID = 'temp-user-1';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const budgetId = params.id;
+        const { id: budgetId } = await params;
         const progress = await BudgetService.calculateBudgetProgress(budgetId, TEMP_USER_ID);
 
         if (!progress) {

@@ -421,10 +421,16 @@ export class BudgetService {
             select: { amount: true, name: true, merchantName: true, category: true },
         });
 
-        // Filter out credit card payments
-        const filteredTransactions = filterOutCreditCardPaymentsPartial(transactions);
+        // Convert Decimal amounts to numbers for compatibility with filterOutCreditCardPaymentsPartial
+        const transactionsWithNumbers = transactions.map(t => ({
+            ...t,
+            amount: Number(t.amount)
+        }));
 
-        return filteredTransactions.reduce((sum, t) => sum + Math.abs(Number(t.amount)), 0);
+        // Filter out credit card payments
+        const filteredTransactions = filterOutCreditCardPaymentsPartial(transactionsWithNumbers);
+
+        return filteredTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
     }
 
     /**

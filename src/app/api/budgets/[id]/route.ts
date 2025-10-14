@@ -7,10 +7,10 @@ const TEMP_USER_ID = 'temp-user-1';
 
 export async function GET(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const budgetId = params.id;
+        const { id: budgetId } = await params;
         const budget = await BudgetService.getBudgetById(budgetId, TEMP_USER_ID);
 
         if (!budget) {
@@ -32,10 +32,10 @@ export async function GET(
 
 export async function PUT(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const budgetId = params.id;
+        const { id: budgetId } = await params;
         const updates: Partial<CreateBudgetRequest> = await request.json();
 
         // Validate amount if provided
@@ -98,10 +98,10 @@ export async function PUT(
 
 export async function DELETE(
     request: NextRequest,
-    { params }: { params: { id: string } }
+    { params }: { params: Promise<{ id: string }> }
 ) {
     try {
-        const budgetId = params.id;
+        const { id: budgetId } = await params;
         const success = await BudgetService.deleteBudget(budgetId, TEMP_USER_ID);
 
         if (!success) {

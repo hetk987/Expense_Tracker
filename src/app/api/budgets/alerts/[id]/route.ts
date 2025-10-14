@@ -6,10 +6,10 @@ const TEMP_USER_ID = 'temp-user-1';
 
 export async function POST(
     request: NextRequest,
-    { params }: { params: { id: string } }
-) {
+    { params }: { params: Promise<{ id: string }> }
+) { 
     try {
-        const alertId = params.id;
+        const { id: alertId } = await params;
         const success = await BudgetService.markAlertAsRead(alertId, TEMP_USER_ID);
 
         if (!success) {
