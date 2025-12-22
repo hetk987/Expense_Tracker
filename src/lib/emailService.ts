@@ -1,13 +1,9 @@
 import { BudgetProgress, BudgetAlert } from '@/types';
 import { formatCurrency } from './utils';
-
-// NOTE: Email functionality is currently DISABLED to avoid missing package dependencies
-// To re-enable, install: npm install @sendgrid/mail nodemailer
-// Then restore the original email sending methods
+import { Resend } from 'resend';
 
 // Email service configuration
 interface EmailConfig {
-    provider: 'resend' | 'sendgrid' | 'nodemailer';
     apiKey: string;
     fromEmail: string;
     fromName: string;
@@ -22,14 +18,17 @@ interface EmailTemplate {
 
 export class EmailService {
     private config: EmailConfig;
+    private resend: Resend;
 
     constructor() {
         this.config = {
-            provider: (process.env.EMAIL_PROVIDER as 'resend' | 'sendgrid' | 'nodemailer') || 'resend',
-            apiKey: process.env.EMAIL_API_KEY || '',
-            fromEmail: process.env.FROM_EMAIL || 'noreply@expensetracker.com',
+            apiKey: process.env.RESEND_API_KEY || '',
+            fromEmail: process.env.FROM_EMAIL || 'onboarding@resend.dev',
             fromName: process.env.FROM_NAME || 'Expense Tracker',
         };
+
+        // Initialize Resend client
+        this.resend = new Resend(this.config.apiKey);
     }
 
     /**
@@ -41,9 +40,113 @@ export class EmailService {
         progress: BudgetProgress,
         alertType: 'WARNING' | 'EXCEEDED' | 'APPROACHING'
     ): Promise<boolean> {
-        // Email service temporarily disabled
-        console.log(`Email service disabled: Would send ${alertType} alert to ${userEmail} for budget ${progress.budget.name}`);
-        return true;
+        // Check if API key is configured
+        if (!this.config.apiKey) {
+            console.warn('Resend API key not configured. Set RESEND_API_KEY environment variable.');
+            return false;
+        }
+
+        try {
+            const template = this.generateBudgetAlertTemplate(progress, alertType, userName);
+
+            const result = await this.resend.emails.send({
+                from: `${this.config.fromName} <${this.config.fromEmail}>`,
+                to: userEmail,
+                subject: template.subject,
+                html: template.html,
+                text: template.text,
+            });
+
+            if (result.error) {
+                console.error('Resend API error:', result.error);
+                return false;
+            }
+
+            console.log('Budget alert email sent successfully:', result.data?.id);
+            return true;
+        } catch (error) {
+            console.error('Error sending budget alert email:', error);
+            return false;
+        }
+    }
+
+    /**
+     * Send a test email to verify email configuration
+     */
+    async sendTestEmail(userEmail: string, userName: string): Promise<boolean> {
+        // Check if API key is configured
+        if (!this.config.apiKey) {
+            console.warn('Resend API key not configured. Set RESEND_API_KEY environment variable.');
+            return false;
+        }
+
+        try {
+            const subject = '✅ Test Email - Expense Tracker';
+            const html = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Email</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; margin: 0; padding: 0; background-color: #f9fafb; }
+        .container { max-width: 600px; margin: 0 auto; background-color: #ffffff; }
+        .header { background-color: #10b981; color: white; padding: 24px; text-align: center; }
+        .content { padding: 24px; }
+        .footer { background-color: #f9fafb; padding: 16px; text-align: center; color: #6b7280; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>✅ Test Email Successful!</h1>
+        </div>
+        <div class="content">
+            <p>Hi ${userName},</p>
+            <p>This is a test email from your Expense Tracker application.</p>
+            <p>If you received this email, your email configuration is working correctly! 🎉</p>
+            <p>You'll receive budget alerts and weekly summaries at this email address.</p>
+        </div>
+        <div class="footer">
+            <p>This is a test email from Expense Tracker</p>
+        </div>
+    </div>
+</body>
+</html>`;
+
+            const text = `Test Email - Expense Tracker
+
+Hi ${userName},
+
+This is a test email from your Expense Tracker application.
+
+If you received this email, your email configuration is working correctly!
+
+You'll receive budget alerts and weekly summaries at this email address.
+
+Best regards,
+Expense Tracker Team`;
+
+            const result = await this.resend.emails.send({
+                from: `${this.config.fromName} <${this.config.fromEmail}>`,
+                to: userEmail,
+                subject,
+                html,
+                text,
+            });
+
+            if (result.error) {
+                console.error('Resend API error:', result.error);
+                return false;
+            }
+
+            console.log('Test email sent successfully:', result.data?.id);
+            return true;
+        } catch (error) {
+            console.error('Error sending test email:', error);
+            return false;
+        }
     }
 
     /**
@@ -54,71 +157,41 @@ export class EmailService {
         userName: string,
         budgetProgressList: BudgetProgress[]
     ): Promise<boolean> {
-        // Email service temporarily disabled
-        console.log(`Email service disabled: Would send weekly summary to ${userEmail} with ${budgetProgressList.length} budgets`);
-        return true;
-    }
+        // Check if API key is configured
+        if (!this.config.apiKey) {
+            console.warn('Resend API key not configured. Set RESEND_API_KEY environment variable.');
+            return false;
+        }
 
-    /**
-     * Send with Resend (recommended)
-     */
-    private async sendWithResend(emailData: any): Promise<boolean> {
+        if (budgetProgressList.length === 0) {
+            console.log('No budgets to include in weekly summary');
+            return false;
+        }
+
         try {
-            const response = await fetch('https://api.resend.com/emails', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${this.config.apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(emailData),
+            const template = this.generateWeeklySummaryTemplate(budgetProgressList, userName);
+
+            const result = await this.resend.emails.send({
+                from: `${this.config.fromName} <${this.config.fromEmail}>`,
+                to: userEmail,
+                subject: template.subject,
+                html: template.html,
+                text: template.text,
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                console.error('Resend API error:', errorData);
+            if (result.error) {
+                console.error('Resend API error:', result.error);
                 return false;
             }
 
-            const result = await response.json();
-            console.log('Email sent successfully with Resend:', result.id);
+            console.log('Weekly summary email sent successfully:', result.data?.id);
             return true;
         } catch (error) {
-            console.error('Error with Resend:', error);
+            console.error('Error sending weekly budget summary email:', error);
             return false;
         }
     }
 
-    /**
-     * Send with SendGrid - DISABLED
-     */
-    private async sendWithSendGrid(emailData: any): Promise<boolean> {
-        console.log('SendGrid email service is disabled');
-        return false;
-    }
-
-    /**
-     * Send with Nodemailer - DISABLED
-     */
-    private async sendWithNodemailer(emailData: any): Promise<boolean> {
-        console.log('Nodemailer email service is disabled');
-        return false;
-    }
-
-    /**
-     * Generic send email method
-     */
-    private async sendEmail(emailData: any): Promise<boolean> {
-        switch (this.config.provider) {
-            case 'resend':
-                return await this.sendWithResend(emailData);
-            case 'sendgrid':
-                return await this.sendWithSendGrid(emailData);
-            case 'nodemailer':
-                return await this.sendWithNodemailer(emailData);
-            default:
-                return false;
-        }
-    }
 
     /**
      * Generate budget alert email template

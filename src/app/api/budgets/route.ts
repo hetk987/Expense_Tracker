@@ -1,19 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BudgetService } from '@/lib/budgetService';
 import { CreateBudgetRequest } from '@/types';
-
-// Temporary user ID until proper auth is implemented
-const TEMP_USER_ID = 'temp-user-1';
+import { getUserId, getUserInfo } from '@/lib/clerkHelpers';
 
 export async function GET(request: NextRequest) {
     try {
+        const userId = await getUserId();
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Please sign in' },
+                { status: 401 }
+            );
+        }
+
         const { searchParams } = new URL(request.url);
         const budgetType = searchParams.get('budgetType') || undefined;
         const isActive = searchParams.get('isActive') === 'true' ? true :
             searchParams.get('isActive') === 'false' ? false : undefined;
 
         const filters = { budgetType, isActive };
-        const budgets = await BudgetService.getBudgets(TEMP_USER_ID, filters);
+        const budgets = await BudgetService.getBudgets(userId, filters);
 
         return NextResponse.json(budgets);
     } catch (error) {
@@ -86,12 +93,23 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        const budget = await BudgetService.createBudget(TEMP_USER_ID, body);
+        const userId = await getUserId();
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Please sign in' },
+                { status: 401 }
+            );
+        }
+
+        const budget = await BudgetService.createBudget(userId, body);
 
         // Automatically check for alerts after budget creation
-        // Use placeholder email/name - in production, get from authenticated user
         try {
-            await BudgetService.checkBudgetAlerts(TEMP_USER_ID, 'user@example.com', 'User');
+            const userInfo = await getUserInfo();
+            if (userInfo) {
+                await BudgetService.checkBudgetAlerts(userId, userInfo.email, userInfo.name);
+            }
         } catch (alertError) {
             // Log but don't fail the budget creation if alert check fails
             console.error('Error checking alerts after budget creation:', alertError);

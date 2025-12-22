@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BudgetService } from '@/lib/budgetService';
-
-// Temporary user ID until proper auth is implemented
-const TEMP_USER_ID = 'temp-user-1';
+import { getUserId } from '@/lib/clerkHelpers';
 
 export async function GET(request: NextRequest) {
     try {
-        const alerts = await BudgetService.getUnreadAlerts(TEMP_USER_ID);
+        const userId = await getUserId();
+        
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Please sign in' },
+                { status: 401 }
+            );
+        }
+
+        const alerts = await BudgetService.getUnreadAlerts(userId);
         return NextResponse.json(alerts);
     } catch (error) {
         console.error('Error getting budget alerts:', error);

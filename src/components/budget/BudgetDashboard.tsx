@@ -74,7 +74,9 @@ export default function BudgetDashboard({
                 ]);
 
             setBudgetProgress(progressData);
+            console.log("Progress data: ", progressData);
             setBudgetSummary(summaryData);
+            console.log("Summary data: ", summaryData);
             setAccounts(accountsData);
             setCategories(categoriesData.map((c) => c.category));
         } catch (error) {

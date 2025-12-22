@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { PlaidService } from '@/lib/plaidService';
 import { BudgetService } from '@/lib/budgetService';
-
-// Temporary user ID until proper auth is implemented
-const TEMP_USER_ID = 'temp-user-1';
-const TEMP_USER_EMAIL = 'user@example.com';
-const TEMP_USER_NAME = 'User';
+import { getUserInfo } from '@/lib/clerkHelpers';
 
 export async function POST(request: NextRequest) {
     try {
@@ -15,7 +11,15 @@ export async function POST(request: NextRequest) {
         // Automatically check for budget alerts after webhook transaction updates
         // This ensures alerts are triggered when new transactions come in via webhook
         try {
-            await BudgetService.checkBudgetAlerts(TEMP_USER_ID, TEMP_USER_EMAIL, TEMP_USER_NAME);
+            // Get authenticated user info from Clerk
+            const userInfo = await getUserInfo();
+            
+            if (userInfo) {
+                await BudgetService.checkBudgetAlerts(userInfo.userId, userInfo.email, userInfo.name);
+            } else {
+                // Webhook might be called without auth context, skip email alerts
+                console.log('No authenticated user found for webhook, skipping email alerts');
+            }
         } catch (alertError) {
             // Log but don't fail the webhook processing if alert check fails
             console.error('Error checking alerts after webhook processing:', alertError);

@@ -152,7 +152,7 @@ export class BudgetService {
         const { startDate, endDate } = this.getBudgetPeriodDates(budget);
         const spent = await this.calculateSpentAmount(budget, startDate, endDate);
 
-        const remaining = Math.max(0, budget.amount - spent);
+        const remaining = budget.amount - spent;
         const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
         const daysRemaining = differenceInDays(endDate, new Date());
         const isOverBudget = spent > budget.amount;
@@ -199,7 +199,7 @@ export class BudgetService {
         const totalBudgetAmount = budgets.reduce((sum, b) => sum + b.amount, 0);
         const totalSpent = progressList.reduce((sum, p) => sum + p.spent, 0);
         const averageAdherence = progressList.length > 0
-            ? progressList.reduce((sum, p) => sum + Math.min(100, p.percentage), 0) / progressList.length
+            ? progressList.reduce((sum, p) => sum + (p.percentage > 100 ? 0 : 100), 0) / progressList.length
             : 0;
 
         return {
@@ -310,6 +310,59 @@ export class BudgetService {
         });
 
         return result.count > 0;
+    }
+
+    /**
+     * Resends email for an existing alert
+     */
+    static async resendAlertEmail(
+        alertId: string,
+        userId: string,
+        userEmail: string,
+        userName: string
+    ): Promise<boolean> {
+        try {
+            // Get the alert with budget info
+            const alert = await prisma.budgetAlert.findFirst({
+                where: {
+                    id: alertId,
+                    budget: { userId },
+                },
+                include: {
+                    budget: true,
+                },
+            });
+
+            if (!alert) {
+                return false;
+            }
+
+            // Get current budget progress
+            const progress = await this.calculateBudgetProgress(alert.budgetId, userId);
+            if (!progress) {
+                return false;
+            }
+
+            // Send email using EmailService
+            const emailService = new EmailService();
+            const alertType = alert.alertType as 'WARNING' | 'EXCEEDED' | 'APPROACHING';
+
+            const emailSent = await emailService.sendBudgetAlert(
+                userEmail,
+                userName,
+                progress,
+                alertType
+            );
+
+            if (emailSent) {
+                console.log(`Alert email resent to ${userEmail} for budget: ${alert.budget.name}`);
+            }
+
+            return emailSent;
+        } catch (error) {
+            console.error('Error resending alert email:', error);
+            return false;
+        }
     }
 
     /**

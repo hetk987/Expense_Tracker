@@ -199,6 +199,25 @@ export const budgetApi = {
         });
         return response.data;
     },
+
+    // Send test email
+    sendTestEmail: async (userEmail?: string, userName?: string): Promise<{ success: boolean; message: string }> => {
+        const response = await api.post<{ success: boolean; message: string }>('/api/budgets/alerts/test-email', {
+            userEmail,
+            userName
+        });
+        return response.data;
+    },
+
+    // Resend alert email
+    resendAlertEmail: async (alertId: string, userEmail?: string, userName?: string): Promise<{ success: boolean; message: string }> => {
+        const response = await api.post<{ success: boolean; message: string }>('/api/budgets/alerts/resend', {
+            alertId,
+            userEmail,
+            userName
+        });
+        return response.data;
+    },
 };
 
 export default api;

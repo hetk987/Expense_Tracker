@@ -1,17 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BudgetService } from '@/lib/budgetService';
 import { CreateBudgetRequest } from '@/types';
-
-// Temporary user ID until proper auth is implemented
-const TEMP_USER_ID = 'temp-user-1';
+import { getUserId } from '@/lib/clerkHelpers';
 
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const userId = await getUserId();
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Please sign in' },
+                { status: 401 }
+            );
+        }
+
         const { id: budgetId } = await params;
-        const budget = await BudgetService.getBudgetById(budgetId, TEMP_USER_ID);
+        const budget = await BudgetService.getBudgetById(budgetId, userId);
 
         if (!budget) {
             return NextResponse.json(
@@ -77,7 +84,16 @@ export async function PUT(
             }
         }
 
-        const budget = await BudgetService.updateBudget(budgetId, TEMP_USER_ID, updates);
+        const userId = await getUserId();
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Please sign in' },
+                { status: 401 }
+            );
+        }
+
+        const budget = await BudgetService.updateBudget(budgetId, userId, updates);
 
         if (!budget) {
             return NextResponse.json(
@@ -101,8 +117,17 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const userId = await getUserId();
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Please sign in' },
+                { status: 401 }
+            );
+        }
+
         const { id: budgetId } = await params;
-        const success = await BudgetService.deleteBudget(budgetId, TEMP_USER_ID);
+        const success = await BudgetService.deleteBudget(budgetId, userId);
 
         if (!success) {
             return NextResponse.json(

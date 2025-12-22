@@ -1,12 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { BudgetService } from '@/lib/budgetService';
-
-// Temporary user ID until proper auth is implemented
-const TEMP_USER_ID = 'temp-user-1';
+import { getUserId } from '@/lib/clerkHelpers';
 
 export async function GET(request: NextRequest) {
     try {
-        const progress = await BudgetService.getAllBudgetProgress(TEMP_USER_ID);
+        const userId = await getUserId();
+
+        if (!userId) {
+            return NextResponse.json(
+                { error: 'Unauthorized - Please sign in' },
+                { status: 401 }
+            );
+        }
+
+        const progress = await BudgetService.getAllBudgetProgress(userId);
         return NextResponse.json(progress);
     } catch (error) {
         console.error('Error getting all budget progress:', error);

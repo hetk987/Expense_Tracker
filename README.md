@@ -4,44 +4,44 @@ A modern, responsive web application for tracking expenses with automatic bank i
 
 ## Features
 
-- **Dashboard**: Overview of financial health with key metrics
-- **Account Linking**: Secure bank account connection via Plaid
-- **Transaction Management**: View, filter, and analyze transactions
-- **Real-time Syncing**: Automatic transaction updates
-- **Responsive Design**: Works seamlessly on desktop and mobile
-- **Modern UI**: Clean, intuitive interface with Tailwind CSS
+-   **Dashboard**: Overview of financial health with key metrics
+-   **Account Linking**: Secure bank account connection via Plaid
+-   **Transaction Management**: View, filter, and analyze transactions
+-   **Real-time Syncing**: Automatic transaction updates
+-   **Responsive Design**: Works seamlessly on desktop and mobile
+-   **Modern UI**: Clean, intuitive interface with Tailwind CSS
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 with App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **Icons**: Lucide React
-- **HTTP Client**: Axios
-- **Plaid Integration**: react-plaid-link
-- **State Management**: React hooks with Zustand (for future expansion)
+-   **Framework**: Next.js 14 with App Router
+-   **Language**: TypeScript
+-   **Styling**: Tailwind CSS
+-   **Icons**: Lucide React
+-   **HTTP Client**: Axios
+-   **Plaid Integration**: react-plaid-link
+-   **State Management**: React hooks with Zustand (for future expansion)
 
 ## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+
-- npm or yarn
-- Backend server running (see backend README)
+-   Node.js 18+
+-   npm or yarn
+-   Backend server running (see backend README)
 
 ### Installation
 
 1. **Install dependencies**:
 
-   ```bash
-   npm install
-   ```
+    ```bash
+    npm install
+    ```
 
 2. **Start the development server**:
 
-   ```bash
-   npm run dev
-   ```
+    ```bash
+    npm run dev
+    ```
 
 3. **Open your browser**:
    Navigate to [http://localhost:3001](http://localhost:3001)
@@ -78,10 +78,10 @@ This application uses **Clerk** for user authentication and management. The inte
 
 ### Features
 
-- **Secure Authentication**: User sign-in and sign-up with Clerk
-- **Protected Routes**: All main pages require authentication
-- **User Management**: Built-in user profile and account management
-- **Modal Authentication**: Seamless sign-in/sign-up experience
+-   **Secure Authentication**: User sign-in and sign-up with Clerk
+-   **Protected Routes**: All main pages require authentication
+-   **User Management**: Built-in user profile and account management
+-   **Modal Authentication**: Seamless sign-in/sign-up experience
 
 ### Authentication Flow
 
@@ -94,64 +94,64 @@ This application uses **Clerk** for user authentication and management. The inte
 
 ### Dashboard (`/`)
 
-- Financial overview with key metrics
-- Recent transactions preview
-- Linked accounts summary
-- Quick actions for syncing and linking accounts
-- **Protected**: Requires authentication
+-   Financial overview with key metrics
+-   Recent transactions preview
+-   Linked accounts summary
+-   Quick actions for syncing and linking accounts
+-   **Protected**: Requires authentication
 
 ### Link Account (`/link-account`)
 
-- Secure Plaid integration for bank account linking
-- Step-by-step account connection process
-- Security information and supported banks
-- Success confirmation with linked account details
-- **Protected**: Requires authentication
+-   Secure Plaid integration for bank account linking
+-   Step-by-step account connection process
+-   Security information and supported banks
+-   Success confirmation with linked account details
+-   **Protected**: Requires authentication
 
 ### Transactions (`/transactions`)
 
-- Comprehensive transaction list with filtering
-- Date range and account filters
-- Pagination support
-- Transaction categorization and status indicators
-- Export and analysis features
-- **Protected**: Requires authentication
+-   Comprehensive transaction list with filtering
+-   Date range and account filters
+-   Pagination support
+-   Transaction categorization and status indicators
+-   Export and analysis features
+-   **Protected**: Requires authentication
 
 ## API Integration
 
 The frontend communicates with the backend through a RESTful API:
 
-- `POST /api/plaid/create-link-token` - Initialize Plaid Link
-- `POST /api/plaid/exchange-token` - Complete account linking
-- `GET /api/plaid/accounts` - Fetch linked accounts
-- `GET /api/plaid/transactions` - Get transactions with filters
-- `POST /api/plaid/sync` - Manual transaction sync
+-   `POST /api/plaid/create-link-token` - Initialize Plaid Link
+-   `POST /api/plaid/exchange-token` - Complete account linking
+-   `GET /api/plaid/accounts` - Fetch linked accounts
+-   `GET /api/plaid/transactions` - Get transactions with filters
+-   `POST /api/plaid/sync` - Manual transaction sync
 
 ## Styling
 
 The application uses Tailwind CSS for styling with a custom design system:
 
-- **Primary Colors**: Blue-based palette for brand elements
-- **Semantic Colors**: Green for income, red for expenses
-- **Responsive Design**: Mobile-first approach with breakpoints
-- **Component Library**: Reusable UI components with consistent styling
+-   **Primary Colors**: Blue-based palette for brand elements
+-   **Semantic Colors**: Green for income, red for expenses
+-   **Responsive Design**: Mobile-first approach with breakpoints
+-   **Component Library**: Reusable UI components with consistent styling
 
 ## Development
 
 ### Available Scripts
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
+-   `npm run dev` - Start development server
+-   `npm run build` - Build for production
+-   `npm run start` - Start production server
+-   `npm run lint` - Run ESLint
 
 ### Code Style
 
-- TypeScript for type safety
-- ESLint for code quality
-- Prettier for code formatting
-- Component-based architecture
-- Custom hooks for reusable logic
+-   TypeScript for type safety
+-   ESLint for code quality
+-   Prettier for code formatting
+-   Component-based architecture
+-   Custom hooks for reusable logic
 
 ## Deployment
 
@@ -165,16 +165,51 @@ The application uses Tailwind CSS for styling with a custom design system:
 
 The app can be deployed to any platform that supports Next.js:
 
-- Netlify
-- AWS Amplify
-- DigitalOcean App Platform
-- Self-hosted servers
+-   Netlify
+-   AWS Amplify
+-   DigitalOcean App Platform
+-   Self-hosted servers
 
 ## Environment Variables
 
 | Variable              | Description     | Default                 |
 | --------------------- | --------------- | ----------------------- |
 | `NEXT_PUBLIC_API_URL` | Backend API URL | `http://localhost:3000` |
+
+### Email Configuration
+
+The application uses **Resend** for sending budget alerts and weekly summaries. Configure the following environment variables:
+
+| Variable              | Description                                             | Required | Default                 |
+| --------------------- | ------------------------------------------------------- | -------- | ----------------------- |
+| `RESEND_API_KEY`      | Resend API key                                          | Yes      | -                       |
+| `FROM_EMAIL`          | Email address to send from (must be verified in Resend) | No       | `onboarding@resend.dev` |
+| `FROM_NAME`           | Display name for email sender                           | No       | `Expense Tracker`       |
+| `NEXT_PUBLIC_APP_URL` | Base URL of your application (for email links)          | No       | `http://localhost:3000` |
+
+#### Resend Setup
+
+1. **Sign up**: Create an account at [resend.com](https://resend.com)
+2. **Get API key**:
+    - Go to API Keys in your Resend dashboard
+    - Create a new API key
+    - Copy the key (starts with `re_`)
+3. **Verify domain** (for production):
+    - Add your domain in Resend dashboard
+    - Follow DNS verification steps
+    - Use your verified domain in `FROM_EMAIL`
+4. **Development**: You can use `onboarding@resend.dev` for testing without domain verification
+
+Example `.env.local`:
+
+```env
+RESEND_API_KEY=re_xxxxxxxxxxxxx
+FROM_EMAIL=noreply@yourdomain.com
+FROM_NAME=Expense Tracker
+NEXT_PUBLIC_APP_URL=https://yourdomain.com
+```
+
+**Note**: For production, you must verify your sending domain in Resend. The default `onboarding@resend.dev` email only works for testing.
 
 ## Contributing
 
@@ -192,6 +227,6 @@ This project is licensed under the MIT License.
 
 For support and questions:
 
-- Check the backend README for API documentation
-- Review Plaid documentation for integration details
-- Open an issue for bugs or feature requests
+-   Check the backend README for API documentation
+-   Review Plaid documentation for integration details
+-   Open an issue for bugs or feature requests

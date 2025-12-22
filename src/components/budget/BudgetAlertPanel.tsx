@@ -5,6 +5,7 @@ import { BudgetAlert } from "@/types";
 import { budgetApi } from "@/lib/api";
 import { useTheme } from "@/hooks/useTheme";
 import { formatCurrency } from "@/lib/utils";
+import { useUser } from "@clerk/nextjs";
 import {
   AlertTriangle,
   CheckCircle,
@@ -25,12 +26,18 @@ export default function BudgetAlertPanel({
   className = "",
 }: BudgetAlertPanelProps) {
   const isDark = useTheme();
+  const { user } = useUser();
   const [alerts, setAlerts] = useState<BudgetAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [emailTesting, setEmailTesting] = useState(false);
-  const [testEmail, setTestEmail] = useState("user@example.com");
-  const [testName, setTestName] = useState("Test User");
+  const [resendingAlertId, setResendingAlertId] = useState<string | null>(null);
+
+  // Get user email and name from Clerk
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress || user?.primaryEmailAddress?.emailAddress || '';
+  const userName = user?.firstName && user?.lastName 
+    ? `${user.firstName} ${user.lastName}` 
+    : user?.firstName || user?.username || 'User';
 
   useEffect(() => {
     loadAlerts();
@@ -68,11 +75,21 @@ export default function BudgetAlertPanel({
   };
 
   const checkAlerts = async () => {
+    if (!userEmail) {
+      alert("Unable to get your email address. Please ensure you're signed in.");
+      return;
+    }
+
     try {
       setRefreshing(true);
-      const result = await budgetApi.checkBudgetAlerts(testEmail, testName);
+      const result = await budgetApi.checkBudgetAlerts(userEmail, userName);
       await loadAlerts(); // Reload to get new alerts
-      alert(`${result.message}\nEmails sent to: ${testEmail}`);
+      
+      if (result.alerts.length > 0) {
+        alert(`${result.message}\n\n${result.alerts.length} email${result.alerts.length > 1 ? 's' : ''} sent to: ${userEmail}`);
+      } else {
+        alert(`${result.message}\n\nNo emails sent - no budgets meet alert criteria or alerts were already sent recently.`);
+      }
     } catch (error) {
       console.error("Error checking alerts:", error);
       alert("Failed to check alerts");
@@ -82,15 +99,58 @@ export default function BudgetAlertPanel({
   };
 
   const sendWeeklySummary = async () => {
+    if (!userEmail) {
+      alert("Unable to get your email address. Please ensure you're signed in.");
+      return;
+    }
+
     try {
       setEmailTesting(true);
-      const result = await budgetApi.sendWeeklySummary(testEmail, testName);
-      alert(`${result.message}\nEmail sent to: ${testEmail}`);
+      const result = await budgetApi.sendWeeklySummary(userEmail, userName);
+      alert(`${result.message}\n\nEmail sent to: ${userEmail}`);
     } catch (error) {
       console.error("Error sending weekly summary:", error);
-      alert("Failed to send weekly summary");
+      alert("Failed to send weekly summary. Make sure you have budgets created.");
     } finally {
       setEmailTesting(false);
+    }
+  };
+
+  const sendTestEmail = async () => {
+    if (!userEmail) {
+      alert("Unable to get your email address. Please ensure you're signed in.");
+      return;
+    }
+
+    try {
+      setEmailTesting(true);
+      const result = await budgetApi.sendTestEmail(userEmail, userName);
+      alert(`${result.message}\n\nCheck your inbox at ${userEmail}`);
+    } catch (error: any) {
+      console.error("Error sending test email:", error);
+      const errorMsg = error?.response?.data?.error || "Failed to send test email";
+      alert(`Error: ${errorMsg}\n\nMake sure RESEND_API_KEY is configured in your environment variables.`);
+    } finally {
+      setEmailTesting(false);
+    }
+  };
+
+  const resendAlertEmail = async (alertId: string) => {
+    if (!userEmail) {
+      alert("Unable to get your email address. Please ensure you're signed in.");
+      return;
+    }
+
+    try {
+      setResendingAlertId(alertId);
+      const result = await budgetApi.resendAlertEmail(alertId, userEmail, userName);
+      alert(`${result.message}\n\nEmail resent to: ${userEmail}`);
+    } catch (error: any) {
+      console.error("Error resending alert email:", error);
+      const errorMsg = error?.response?.data?.error || "Failed to resend alert email";
+      alert(`Error: ${errorMsg}`);
+    } finally {
+      setResendingAlertId(null);
     }
   };
 
@@ -190,29 +250,27 @@ export default function BudgetAlertPanel({
       {/* Email Testing Section */}
       <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
         <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-          Email Notification Testing
+          Email Notifications
         </h4>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-          <input
-            type="email"
-            value={testEmail}
-            onChange={(e) => setTestEmail(e.target.value)}
-            placeholder="Test email address"
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
-          />
-          <input
-            type="text"
-            value={testName}
-            onChange={(e) => setTestName(e.target.value)}
-            placeholder="Test user name"
-            className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm"
-          />
-        </div>
-        <div className="flex gap-2">
+        {userEmail ? (
+          <div className="mb-3">
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
+              Emails will be sent to: <span className="font-medium text-gray-900 dark:text-gray-100">{userEmail}</span>
+            </p>
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Name: <span className="font-medium text-gray-900 dark:text-gray-100">{userName}</span>
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-yellow-600 dark:text-yellow-400 mb-3">
+            Unable to load your email address. Please ensure you're signed in.
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={checkAlerts}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm"
+            disabled={refreshing || !userEmail}
+            className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {refreshing ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -222,9 +280,21 @@ export default function BudgetAlertPanel({
             Check & Send Alerts
           </button>
           <button
+            onClick={sendTestEmail}
+            disabled={emailTesting || !userEmail}
+            className="flex items-center gap-2 px-3 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          >
+            {emailTesting ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Mail className="w-4 h-4" />
+            )}
+            Send Test Email
+          </button>
+          <button
             onClick={sendWeeklySummary}
-            disabled={emailTesting}
-            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 text-sm"
+            disabled={emailTesting || !userEmail}
+            className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
             {emailTesting ? (
               <RefreshCw className="w-4 h-4 animate-spin" />
@@ -277,6 +347,18 @@ export default function BudgetAlertPanel({
                 </div>
 
                 <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => resendAlertEmail(alert.id)}
+                    disabled={resendingAlertId === alert.id || !userEmail}
+                    className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Resend email"
+                  >
+                    {resendingAlertId === alert.id ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Mail className="w-4 h-4" />
+                    )}
+                  </button>
                   {!alert.isRead && (
                     <button
                       onClick={() => markAlertAsRead(alert.id)}
