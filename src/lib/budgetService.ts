@@ -1,7 +1,7 @@
 import { prisma } from './prismaClient';
 import { Budget, BudgetProgress, BudgetAlert, BudgetSummary, CreateBudgetRequest } from '@/types';
 import { filterOutCreditCardPaymentsPartial } from './chartUtils';
-import { addDays, addWeeks, addMonths, addYears, isAfter, isBefore, differenceInDays } from 'date-fns';
+import { addDays, addWeeks, addMonths, addYears, isAfter, isBefore, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from 'date-fns';
 import { EmailService } from './emailService';
 
 export class BudgetService {
@@ -469,28 +469,52 @@ export class BudgetService {
 
     /**
      * Helper: Get budget period start and end dates
+     * For recurring budgets (WEEKLY, MONTHLY, YEARLY), calculates the current active period
+     * based on the original start date. For CUSTOM periods, uses explicit start/end dates.
      */
     private static getBudgetPeriodDates(budget: Budget): { startDate: Date; endDate: Date } {
-        const startDate = new Date(budget.startDate);
+        const originalStartDate = new Date(budget.startDate);
+        let startDate: Date;
         let endDate: Date;
 
-        if (budget.endDate) {
-            endDate = new Date(budget.endDate);
-        } else {
-            // Calculate end date based on period
-            switch (budget.period) {
-                case 'WEEKLY':
-                    endDate = addWeeks(startDate, 1);
-                    break;
-                case 'MONTHLY':
-                    endDate = addMonths(startDate, 1);
-                    break;
-                case 'YEARLY':
-                    endDate = addYears(startDate, 1);
-                    break;
-                default:
-                    endDate = addMonths(startDate, 1); // Default to monthly
-            }
+        // CUSTOM periods remain one-time budgets with explicit dates
+        if (budget.period === 'CUSTOM' && budget.endDate) {
+            return {
+                startDate: originalStartDate,
+                endDate: new Date(budget.endDate)
+            };
+        }
+
+        // Calculate current period for recurring budgets (WEEKLY, MONTHLY, YEARLY)
+        const now = new Date();
+
+        switch (budget.period) {
+            case 'WEEKLY':
+                // Find which week we're in since original start
+                // Calculate how many complete weeks have passed
+                const weeksSinceStart = differenceInWeeks(now, originalStartDate);
+                startDate = addWeeks(originalStartDate, weeksSinceStart);
+                endDate = addWeeks(startDate, 1);
+                break;
+            case 'MONTHLY':
+                // Find which month we're in since original start
+                // Calculate how many complete months have passed
+                const monthsSinceStart = differenceInMonths(now, originalStartDate);
+                startDate = addMonths(originalStartDate, monthsSinceStart);
+                endDate = addMonths(startDate, 1);
+                break;
+            case 'YEARLY':
+                // Find which year we're in since original start
+                // Calculate how many complete years have passed
+                const yearsSinceStart = differenceInYears(now, originalStartDate);
+                startDate = addYears(originalStartDate, yearsSinceStart);
+                endDate = addYears(startDate, 1);
+                break;
+            default:
+                // Fallback to monthly calculation
+                const monthsSinceStartFallback = differenceInMonths(now, originalStartDate);
+                startDate = addMonths(originalStartDate, monthsSinceStartFallback);
+                endDate = addMonths(startDate, 1);
         }
 
         return { startDate, endDate };
