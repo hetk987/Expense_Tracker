@@ -116,24 +116,24 @@ export default function BudgetAlertPanel({
     }
   };
 
-  const sendTestEmail = async () => {
-    if (!userEmail) {
-      alert("Unable to get your email address. Please ensure you're signed in.");
-      return;
-    }
+  // const sendTestEmail = async () => {
+  //   if (!userEmail) {
+  //     alert("Unable to get your email address. Please ensure you're signed in.");
+  //     return;
+  //   }
 
-    try {
-      setEmailTesting(true);
-      const result = await budgetApi.sendTestEmail(userEmail, userName);
-      alert(`${result.message}\n\nCheck your inbox at ${userEmail}`);
-    } catch (error: any) {
-      console.error("Error sending test email:", error);
-      const errorMsg = error?.response?.data?.error || "Failed to send test email";
-      alert(`Error: ${errorMsg}\n\nMake sure RESEND_API_KEY is configured in your environment variables.`);
-    } finally {
-      setEmailTesting(false);
-    }
-  };
+  //   try {
+  //     setEmailTesting(true);
+  //     const result = await budgetApi.sendTestEmail(userEmail, userName);
+  //     alert(`${result.message}\n\nCheck your inbox at ${userEmail}`);
+  //   } catch (error: any) {
+  //     console.error("Error sending test email:", error);
+  //     const errorMsg = error?.response?.data?.error || "Failed to send test email";
+  //     alert(`Error: ${errorMsg}\n\nMake sure RESEND_API_KEY is configured in your environment variables.`);
+  //   } finally {
+  //     setEmailTesting(false);
+  //   }
+  // };
 
   const resendAlertEmail = async (alertId: string) => {
     if (!userEmail) {
