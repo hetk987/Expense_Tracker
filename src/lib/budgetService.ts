@@ -135,11 +135,12 @@ export class BudgetService {
      * Deletes a budget
      */
     static async deleteBudget(budgetId: string, userId: string): Promise<boolean> {
-        const result = await prisma.budget.deleteMany({
+        console.log('Deleting budget:', budgetId, userId);
+        const result = await prisma.budget.delete({
             where: { id: budgetId, userId },
         });
 
-        return result.count > 0;
+        return result !== null;
     }
 
     /**
@@ -309,6 +310,16 @@ export class BudgetService {
             data: { isRead: true },
         });
 
+        return result.count > 0;
+    }
+
+    /**
+     * Deletes budget alerts
+     */
+    static async deleteBudgetAlerts(budgetId: string): Promise<boolean> {
+        const result = await prisma.budgetAlert.deleteMany({
+            where: { budgetId },
+        });
         return result.count > 0;
     }
 

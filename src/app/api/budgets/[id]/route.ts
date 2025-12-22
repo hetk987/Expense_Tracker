@@ -127,6 +127,14 @@ export async function DELETE(
         }
 
         const { id: budgetId } = await params;
+        const alerts = await BudgetService.deleteBudgetAlerts(budgetId);
+        if (!alerts) {
+            return NextResponse.json(
+                { error: 'Failed to delete alerts' },
+                { status: 500 }
+            );
+        }
+        
         const success = await BudgetService.deleteBudget(budgetId, userId);
 
         if (!success) {
