@@ -87,6 +87,16 @@ export async function POST(request: NextRequest) {
         }
 
         const budget = await BudgetService.createBudget(TEMP_USER_ID, body);
+
+        // Automatically check for alerts after budget creation
+        // Use placeholder email/name - in production, get from authenticated user
+        try {
+            await BudgetService.checkBudgetAlerts(TEMP_USER_ID, 'user@example.com', 'User');
+        } catch (alertError) {
+            // Log but don't fail the budget creation if alert check fails
+            console.error('Error checking alerts after budget creation:', alertError);
+        }
+
         return NextResponse.json(budget, { status: 201 });
     } catch (error) {
         console.error('Error creating budget:', error);

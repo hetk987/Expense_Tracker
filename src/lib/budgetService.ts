@@ -82,19 +82,53 @@ export class BudgetService {
      * Updates a budget
      */
     static async updateBudget(budgetId: string, userId: string, updates: Partial<CreateBudgetRequest>): Promise<Budget | null> {
-        const budget = await prisma.budget.updateMany({
+        // First verify the budget exists and belongs to the user
+        const existingBudget = await prisma.budget.findFirst({
             where: { id: budgetId, userId },
-            data: {
-                ...updates,
-                startDate: updates.startDate ? new Date(updates.startDate) : undefined,
-                endDate: updates.endDate ? new Date(updates.endDate) : undefined,
-                updatedAt: new Date(),
-            },
         });
 
-        if (budget.count === 0) return null;
+        if (!existingBudget) {
+            return null;
+        }
 
-        return this.getBudgetById(budgetId, userId);
+        // Build update data object, only including fields that are explicitly provided (not undefined)
+        const updateData: any = {
+            updatedAt: new Date(),
+        };
+
+        // Only include fields that are explicitly provided (not undefined)
+        if (updates.name !== undefined) updateData.name = updates.name;
+        if (updates.budgetType !== undefined) updateData.budgetType = updates.budgetType;
+        if (updates.targetValue !== undefined) updateData.targetValue = updates.targetValue;
+        if (updates.merchantName !== undefined) updateData.merchantName = updates.merchantName;
+        if (updates.accountId !== undefined) updateData.accountId = updates.accountId;
+        if (updates.amount !== undefined) updateData.amount = updates.amount;
+        if (updates.period !== undefined) updateData.period = updates.period;
+        if (updates.startDate !== undefined) updateData.startDate = new Date(updates.startDate);
+        if (updates.endDate !== undefined) {
+            updateData.endDate = updates.endDate ? new Date(updates.endDate) : null;
+        }
+        // Handle isActive if provided (even though it's not in CreateBudgetRequest type)
+        if ('isActive' in updates && updates.isActive !== undefined) {
+            updateData.isActive = (updates as any).isActive;
+        }
+        if (updates.alertThreshold !== undefined) updateData.alertThreshold = updates.alertThreshold;
+
+        try {
+            // Use only id in where clause since it's the unique field
+            await prisma.budget.update({
+                where: { id: budgetId },
+                data: updateData,
+            });
+
+            return await this.getBudgetById(budgetId, userId);
+        } catch (error: any) {
+            // If budget not found, Prisma throws P2025
+            if (error.code === 'P2025') {
+                return null;
+            }
+            throw error;
+        }
     }
 
     /**
@@ -399,7 +433,7 @@ export class BudgetService {
     private static async calculateSpentAmount(budget: Budget, startDate: Date, endDate: Date): Promise<number> {
         let where: any = {
             date: { gte: startDate, lte: endDate },
-            amount: { lt: 0 }, // Only expenses
+            amount: { gt: 0 }, // Only expenses
         };
 
         // Apply budget-specific filters
