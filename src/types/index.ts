@@ -66,10 +66,6 @@ export interface TransactionsResponse {
 
 export interface TransactionFilters {
     accountId?: string;
-    /**
-     * Optional list of account IDs to filter by.
-     * When provided, takes precedence over accountId for multi-account/card filtering.
-     */
     accountIds?: string[];
     startDate?: string;
     endDate?: string;
