@@ -1,13 +1,13 @@
 {
     "$schema": "https://openapi.vercel.sh/vercel.json",
     "crons": [
-        {
-            "path": "/api/budgets/alerts/cron?secret=)MQ'^&w_$jv=8#9Z]:9}rUys5NQ_&<X),pi$P5HBp[VBi[wqL$Pj8;.&ZWEBr",
-            "schedule": "0 8 * * *"
-        },
-        {
-            "path": "/api/budgets/summary/weekly/cron?secret=)MQ'^&w_$jv=8#9Z]:9}rUys5NQ_&<X),pi$P5HBp[VBi[wqL$Pj8;.&ZWEBr",
-            "schedule": "0 9 * * 1"
-        }
+      {
+        "path": "/api/budgets/alerts/cron?secret=cron_1f9b0ae5d92f4c7f9c8d",
+        "schedule": "0 8 * * *"
+      },
+      {
+        "path": "/api/budgets/summary/weekly/cron?secret=cron_1f9b0ae5d92f4c7f9c8d",
+        "schedule": "0 9 * * 1"
+      }
     ]
-}
+  }

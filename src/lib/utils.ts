@@ -10,8 +10,14 @@ export function cn(...inputs: ClassValue[]) {
  * Eliminates redundant parameter parsing across API endpoints
  */
 export function parseTransactionFilters(searchParams: URLSearchParams): TransactionFilters {
+    const accountIdsParam = searchParams.get('accountIds');
+    const accountIds = accountIdsParam
+        ? accountIdsParam.split(',').map((id) => id.trim()).filter(Boolean)
+        : undefined;
+
     return {
         accountId: searchParams.get('accountId') || undefined,
+        accountIds,
         startDate: searchParams.get('startDate') || undefined,
         endDate: searchParams.get('endDate') || undefined,
         limit: searchParams.get('limit') ? parseInt(searchParams.get('limit')!) : undefined,
@@ -32,6 +38,9 @@ export function buildTransactionParams(filters: TransactionFilters): URLSearchPa
     const params = new URLSearchParams();
 
     if (filters.accountId) params.append('accountId', filters.accountId);
+    if (filters.accountIds && filters.accountIds.length > 0) {
+        params.append('accountIds', filters.accountIds.join(','));
+    }
     if (filters.startDate) params.append('startDate', filters.startDate);
     if (filters.endDate) params.append('endDate', filters.endDate);
     if (filters.limit) params.append('limit', filters.limit.toString());
@@ -106,6 +115,31 @@ export function createLocalDate(dateStr: string, isEndDate: boolean = false): Da
  */
 export function toDateString(date: Date): string {
     return date.toISOString().split('T')[0];
+}
+
+/**
+ * Returns today's date as YYYY-MM-DD in UTC (for filter endDate defaults).
+ */
+export function getTodayDateString(): string {
+    const now = new Date();
+    const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+    return toDateString(today);
+}
+
+/**
+ * Returns initial TransactionFilters (current year range, today as endDate).
+ * Optional overrideStartDate (e.g. earliest transaction date) for startDate.
+ */
+export function getInitialFilters(overrideStartDate?: string | null): TransactionFilters {
+    const yearRange = getCurrentYearRange();
+    return {
+        limit: 50,
+        offset: 0,
+        sortBy: "date",
+        sortOrder: "desc",
+        startDate: overrideStartDate ?? yearRange.startDate,
+        endDate: getTodayDateString(),
+    };
 }
 
 export function getCurrentMonthRange() {

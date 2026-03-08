@@ -14,6 +14,7 @@ import {
     BudgetSummary,
     CreateBudgetRequest,
     BudgetFilters,
+    PlaidTransaction,
 } from '@/types';
 import { buildTransactionParams } from '@/lib/utils';
 
@@ -47,7 +48,11 @@ export const plaidApi = {
         return response.data;
     },
 
-
+    // Update transaction status
+    updateTransactionStatus: async (id: string): Promise<PlaidTransaction> => {
+        const response = await api.put<PlaidTransaction>(`/api/plaid/transactions/${id}`);
+        return response.data;
+    },
 
     // Get all categories
     getCategories: async (filters?: { accountId?: string; startDate?: string; endDate?: string }): Promise<CategoryStats[]> => {

@@ -1,9 +1,9 @@
 import { Configuration, PlaidApi, PlaidEnvironments, Products, CountryCode } from 'plaid';
 import { prisma } from './prismaClient';
 import { getCurrentYearRange, createLocalDate, toDateString } from './utils';
-import { Decimal } from '@prisma/client/runtime/library';
 import { TRANSACTION_LIMITS, PAGINATION } from './constants';
 import { filterOutCreditCardPaymentsPartial } from './chartUtils';
+import type { TransactionFilters } from '@/types';
 
 const configuration = new Configuration({
     basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments || 'sandbox'],
@@ -17,21 +17,27 @@ const configuration = new Configuration({
 
 const plaidClient = new PlaidApi(configuration);
 
-export interface TransactionFilters {
-    accountId?: string;
-    startDate?: string;
-    endDate?: string;
-    limit?: number;
-    offset?: number;
-    category?: string;
-    search?: string;
-    status?: string;
-    sortBy?: "date" | "amount" | "name";
-    sortOrder?: "asc" | "desc";
-}
-
-
 export class PlaidService {
+    static async changeTransactionStatus(id: string) {
+        try {
+            const transaction = await prisma.plaidTransaction.findUnique({
+                where: { id },
+            });
+            if (!transaction) {
+                throw new Error('Transaction not found');
+            }
+            transaction.pending = !transaction.pending;
+            await prisma.plaidTransaction.update({
+                where: { id },
+                data: { pending: transaction.pending },
+            });
+            return transaction;
+        } catch (error) {
+            console.error('Error changing transaction status:', error);
+            throw error;
+        }
+    }
+
     /**
      * Creates a link token for Plaid Link integration
      */
@@ -201,74 +207,8 @@ export class PlaidService {
      */
     static async getTransactions(filters: TransactionFilters = {}) {
         try {
-            const where: any = {};
-
-            if (filters.accountId) {
-                where.accountId = filters.accountId;
-            }
-
-            if (filters.startDate) {
-                where.date = {
-                    ...where.date,
-                    gte: createLocalDate(filters.startDate, false),
-                };
-            }
-
-            if (filters.endDate) {
-                where.date = {
-                    ...where.date,
-                    lte: createLocalDate(filters.endDate, true),
-                };
-            }
-
-            if (filters.category && filters.category !== 'all') {
-                where.category = filters.category;
-            }
-
-            if (filters.search) {
-                where.OR = [
-                    {
-                        name: {
-                            contains: filters.search,
-                            mode: 'insensitive',
-                        },
-                    },
-                    {
-                        merchantName: {
-                            contains: filters.search,
-                            mode: 'insensitive',
-                        },
-                    },
-                ];
-            }
-
-            if (filters.status && filters.status !== 'all') {
-                if (filters.status === 'pending') {
-                    where.pending = true;
-                } else if (filters.status === 'completed') {
-                    where.pending = false;
-                }
-            }
-
-            // Determine sort order
-            let orderBy: any = {};
-            if (filters.sortBy) {
-                switch (filters.sortBy) {
-                    case 'date':
-                        orderBy.date = filters.sortOrder || 'desc';
-                        break;
-                    case 'amount':
-                        orderBy.amount = filters.sortOrder || 'desc';
-                        break;
-                    case 'name':
-                        orderBy.name = filters.sortOrder || 'asc';
-                        break;
-                    default:
-                        orderBy.date = 'desc';
-                }
-            } else {
-                orderBy.date = 'desc';
-            }
+            const where = this.buildWhereClause(filters);
+            const orderBy = this.buildOrderBy(filters);
 
             const transactions = await prisma.plaidTransaction.findMany({
                 where,
@@ -299,54 +239,7 @@ export class PlaidService {
      */
     static async getTransactionStats(filters: TransactionFilters = {}) {
         try {
-            const where: any = {};
-
-            if (filters.accountId) {
-                where.accountId = filters.accountId;
-            }
-
-            if (filters.startDate) {
-                where.date = {
-                    ...where.date,
-                    gte: createLocalDate(filters.startDate, false),
-                };
-            }
-
-            if (filters.endDate) {
-                where.date = {
-                    ...where.date,
-                    lte: createLocalDate(filters.endDate, true),
-                };
-            }
-
-            if (filters.category && filters.category !== 'all') {
-                where.category = filters.category;
-            }
-
-            if (filters.search) {
-                where.OR = [
-                    {
-                        name: {
-                            contains: filters.search,
-                            mode: 'insensitive',
-                        },
-                    },
-                    {
-                        merchantName: {
-                            contains: filters.search,
-                            mode: 'insensitive',
-                        },
-                    },
-                ];
-            }
-
-            if (filters.status && filters.status !== 'all') {
-                if (filters.status === 'pending') {
-                    where.pending = true;
-                } else if (filters.status === 'completed') {
-                    where.pending = false;
-                }
-            }
+            const where = this.buildWhereClause(filters);
 
             // Get all transactions to filter out credit card payments
             const allTransactionsRaw = await prisma.plaidTransaction.findMany({
@@ -359,7 +252,7 @@ export class PlaidService {
                     category: true,
                 },
             });
-            const allTransactions = allTransactionsRaw.map(t => ({
+            const allTransactions = allTransactionsRaw.map((t) => ({
                 ...t,
                 amount: Number(t.amount),
             }));
@@ -580,7 +473,9 @@ export class PlaidService {
     private static buildWhereClause(filters: TransactionFilters) {
         const where: any = {};
 
-        if (filters.accountId) {
+        if (filters.accountIds && filters.accountIds.length > 0) {
+            where.accountId = { in: filters.accountIds };
+        } else if (filters.accountId) {
             where.accountId = filters.accountId;
         }
 
@@ -641,12 +536,14 @@ export class PlaidService {
      * Gets all unique categories from transactions with optional filtering
      * Excludes credit card payments from spending calculations
      */
-    static async getCategories(filters: { accountId?: string; startDate?: string; endDate?: string } = {}) {
+    static async getCategories(filters: TransactionFilters = {}) {
         try {
             const whereClause: any = {};
 
             // Add account filter if specified
-            if (filters.accountId) {
+            if (filters.accountIds && filters.accountIds.length > 0) {
+                whereClause.accountId = { in: filters.accountIds };
+            } else if (filters.accountId) {
                 whereClause.accountId = filters.accountId;
             }
 
@@ -672,7 +569,7 @@ export class PlaidService {
                     category: true,
                 },
             });
-            const allCategoryTransactions = allCategoryTransactionsRaw.map(t => ({
+            const allCategoryTransactions = allCategoryTransactionsRaw.map((t) => ({
                 ...t,
                 amount: Number(t.amount),
             }));

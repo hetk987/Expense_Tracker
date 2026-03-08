@@ -204,7 +204,7 @@ export default function Dashboard() {
                     onClick={() => setShowAllCategories(!showAllCategories)}
                     className={`${
                       showAllCategories
-                        ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+                        ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300 w-fit"
                         : ""
                     }`}
                   >
@@ -218,7 +218,7 @@ export default function Dashboard() {
                     onClick={() => setSelectedCategory("all")}
                     className={
                       selectedCategory === "all"
-                        ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300"
+                        ? "bg-primary-100 text-primary-700 dark:bg-primary-900/20 dark:text-primary-300 w-fit"
                         : ""
                     }
                   >
@@ -231,15 +231,6 @@ export default function Dashboard() {
                   // Calculate dynamic width based on category name length and total categories
                   const categoryText =
                     category === "all" ? "All Categories" : String(category);
-                  const textLength = categoryText.length;
-                  const baseWidth = Math.max(textLength * 9 + 24, 80); // 9px per char + 24px for padding
-                  const maxWidth = Math.min(200, baseWidth); // Cap at 200px
-                  const minWidth = allCategories.length > 8 ? 70 : 90; // Smaller min width if many categories
-                  const calculatedWidth = Math.max(
-                    minWidth,
-                    Math.min(maxWidth, textLength * 9 + 24)
-                  );
-
                   return (
                     <Button
                       key={String(category)}
@@ -252,14 +243,9 @@ export default function Dashboard() {
                         selectedCategory === category
                           ? "bg-primary-600 text-white shadow-lg"
                           : "hover:bg-gray-50 dark:hover:bg-gray-800"
-                      }`}
-                      style={{
-                        width: `${calculatedWidth}px`,
-                        minWidth: `${minWidth}px`,
-                        maxWidth: `${maxWidth}px`,
-                      }}
+                      } w-fit`}
                     >
-                      {categoryText}
+                      {categoryText.replace(/_/g, " ")}
                     </Button>
                   );
                 })}

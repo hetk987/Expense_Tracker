@@ -32,6 +32,14 @@ export class EmailService {
     }
 
     /**
+     * Returns whether the email service is configured with the required environment variables.
+     * This is useful for cron jobs and health checks to short-circuit when email cannot be sent.
+     */
+    static isConfigured(): boolean {
+        return !!process.env.RESEND_API_KEY;
+    }
+
+    /**
      * Send budget alert email
      */
     async sendBudgetAlert(
