@@ -54,9 +54,10 @@ async function handleRequest(request: NextRequest) {
     let sent = 0;
     let failed = 0;
 
+    const client = await clerkClient();
     for (const { userId } of userBudgets) {
         try {
-            const user = await (clerkClient as any).users.getUser(userId);
+            const user = await client.users.getUser(userId);
 
             const email =
                 user.emailAddresses.find((e: { id: string }) => e.id === user.primaryEmailAddressId)?.emailAddress ||
