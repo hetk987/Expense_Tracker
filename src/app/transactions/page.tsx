@@ -36,6 +36,7 @@ import {
     Activity,
     Check,
 } from "lucide-react";
+import { getDashboardData } from "@/app/actions";
 import { plaidApi } from "@/lib/api";
 import {
     PlaidTransaction,
@@ -397,10 +398,11 @@ export default function TransactionsPage() {
                 sortOrder: "asc" as const, // Ascending to get the earliest
             };
 
-            const dashboardData = await plaidApi.getDashboardData(earlyFilters);
+            const result = await getDashboardData(earlyFilters);
+            const dashboardData = result && !("error" in result) ? result : null;
 
             if (
-                dashboardData.transactions &&
+                dashboardData?.transactions &&
                 dashboardData.transactions.length > 0
             ) {
                 const earliestDate = dashboardData.transactions[0].date;
@@ -427,10 +429,9 @@ export default function TransactionsPage() {
                 offset: undefined, // Remove offset
             };
 
-            const allData = await plaidApi.getDashboardData(
-                allTransactionsFilters,
-            );
-            setAllTransactions(allData.transactions);
+            const result = await getDashboardData(allTransactionsFilters);
+            const allData = result && !("error" in result) ? result : null;
+            if (allData) setAllTransactions(allData.transactions);
         } catch (error) {
             console.error(
                 "Error loading all transactions for analytics:",
@@ -456,8 +457,12 @@ export default function TransactionsPage() {
             setChartLoading(true);
 
             // Load paginated transactions for the list
-            const dashboardData = await plaidApi.getDashboardData(filters);
-
+            const result = await getDashboardData(filters);
+            const dashboardData = result && !("error" in result) ? result : null;
+            if (!dashboardData) {
+                setError("Failed to load transactions");
+                return;
+            }
             setTransactions(dashboardData.transactions);
             setTransactionStats(dashboardData.stats);
             setAvailableCategories(dashboardData.categories);

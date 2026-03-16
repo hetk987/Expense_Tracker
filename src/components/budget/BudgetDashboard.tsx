@@ -8,7 +8,15 @@ import {
     CreateBudgetRequest,
     PlaidAccount,
 } from "@/types";
-import { budgetApi, plaidApi } from "@/lib/api";
+import {
+    getAllBudgetProgress,
+    getBudgetSummary,
+    createBudget,
+    updateBudget,
+    deleteBudget,
+    getAccounts,
+    getCategories,
+} from "@/app/actions";
 import { useTheme } from "@/hooks/useTheme";
 import { formatCurrency } from "@/lib/utils";
 import BudgetProgressCard from "./BudgetProgressCard";
@@ -65,18 +73,21 @@ export default function BudgetDashboard({
     const loadDashboardData = async () => {
         try {
             setLoading(true);
-            const [progressData, summaryData, accountsData, categoriesData] =
+            const [progressResult, summaryResult, accountsResult, categoriesResult] =
                 await Promise.all([
-                    budgetApi.getAllBudgetProgress(),
-                    budgetApi.getBudgetSummary(),
-                    plaidApi.getAccounts(),
-                    plaidApi.getCategories(),
+                    getAllBudgetProgress(),
+                    getBudgetSummary(),
+                    getAccounts(),
+                    getCategories(),
                 ]);
 
+            const progressData = Array.isArray(progressResult) ? progressResult : [];
+            const summaryData = summaryResult && !("error" in summaryResult) ? summaryResult : null;
+            const accountsData = Array.isArray(accountsResult) ? accountsResult : [];
+            const categoriesData = Array.isArray(categoriesResult) ? categoriesResult : [];
+
             setBudgetProgress(progressData);
-            console.log("Progress data: ", progressData);
             setBudgetSummary(summaryData);
-            console.log("Summary data: ", summaryData);
             setAccounts(accountsData);
             setCategories(categoriesData.map((c) => c.category));
         } catch (error) {
@@ -95,7 +106,8 @@ export default function BudgetDashboard({
     const handleCreateBudget = async (budgetData: CreateBudgetRequest) => {
         try {
             setModalLoading(true);
-            await budgetApi.createBudget(budgetData);
+            const result = await createBudget(budgetData);
+            if ("error" in result) throw new Error(result.error);
             await loadDashboardData();
             setIsCreateModalOpen(false);
         } catch (error) {
@@ -112,7 +124,8 @@ export default function BudgetDashboard({
     ) => {
         try {
             setModalLoading(true);
-            await budgetApi.updateBudget(budgetId, updates);
+            const result = await updateBudget(budgetId, updates);
+            if (result && "error" in result) throw new Error(result.error);
             await loadDashboardData();
             setEditingBudget(null);
         } catch (error) {
@@ -127,7 +140,8 @@ export default function BudgetDashboard({
         if (!confirm("Are you sure you want to delete this budget?")) return;
 
         try {
-            await budgetApi.deleteBudget(budgetId);
+            const result = await deleteBudget(budgetId);
+            if (result && "error" in result) throw new Error(result.error);
             await loadDashboardData();
         } catch (error) {
             console.error("Error deleting budget:", error);
@@ -349,7 +363,7 @@ export default function BudgetDashboard({
 
             {/* Budget Progress Cards */}
             {filteredBudgets.length > 0 ? (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
                     {filteredBudgets.map((progress) => (
                         <BudgetProgressCard
                             key={progress.budget.id}

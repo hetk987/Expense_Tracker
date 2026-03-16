@@ -11,6 +11,7 @@ import {
   Moon,
   Settings,
   Target,
+  GitCompare,
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import {
@@ -28,6 +29,7 @@ export default function Header() {
   const navigation = [
     { name: "Dashboard", href: "/", icon: BarChart3 },
     { name: "Transactions", href: "/transactions", icon: CreditCard },
+    { name: "Compare", href: "/compare", icon: GitCompare },
     { name: "Budgets", href: "/budgets", icon: Target },
     { name: "Link Card", href: "/link-account", icon: Plus },
     { name: "Accounts", href: "/accounts", icon: Settings },

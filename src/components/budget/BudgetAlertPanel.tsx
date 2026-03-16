@@ -2,7 +2,13 @@
 
 import { useState, useEffect } from "react";
 import { BudgetAlert } from "@/types";
-import { budgetApi } from "@/lib/api";
+import {
+  getBudgetAlerts,
+  markAlertAsRead,
+  checkBudgetAlerts,
+  sendWeeklySummary,
+  resendAlertEmail,
+} from "@/app/actions";
 import { useTheme } from "@/hooks/useTheme";
 import { formatCurrency } from "@/lib/utils";
 import { useUser } from "@clerk/nextjs";
@@ -46,7 +52,8 @@ export default function BudgetAlertPanel({
   const loadAlerts = async () => {
     try {
       setLoading(true);
-      const alertsData = await budgetApi.getBudgetAlerts();
+      const result = await getBudgetAlerts();
+      const alertsData = Array.isArray(result) ? result : [];
       setAlerts(alertsData);
     } catch (error) {
       console.error("Error loading alerts:", error);
@@ -61,34 +68,36 @@ export default function BudgetAlertPanel({
     setRefreshing(false);
   };
 
-  const markAlertAsRead = async (alertId: string) => {
+  const markAlertAsReadHandler = async (alertId: string) => {
     try {
-      await budgetApi.markAlertAsRead(alertId);
-      setAlerts((prev) =>
-        prev.map((alert) =>
-          alert.id === alertId ? { ...alert, isRead: true } : alert
-        )
-      );
+      const result = await markAlertAsRead(alertId);
+      if (result && !("error" in result) && result.success) {
+        setAlerts((prev) =>
+          prev.map((alert) =>
+            alert.id === alertId ? { ...alert, isRead: true } : alert
+          )
+        );
+      }
     } catch (error) {
       console.error("Error marking alert as read:", error);
     }
   };
 
   const checkAlerts = async () => {
-    if (!userEmail) {
-      alert("Unable to get your email address. Please ensure you're signed in.");
-      return;
-    }
-
     try {
       setRefreshing(true);
-      const result = await budgetApi.checkBudgetAlerts(userEmail, userName);
-      await loadAlerts(); // Reload to get new alerts
-      
-      if (result.alerts.length > 0) {
-        alert(`${result.message}\n\n${result.alerts.length} email${result.alerts.length > 1 ? 's' : ''} sent to: ${userEmail}`);
-      } else {
-        alert(`${result.message}\n\nNo emails sent - no budgets meet alert criteria or alerts were already sent recently.`);
+      const result = await checkBudgetAlerts();
+      if (result && "error" in result) {
+        alert(result.error);
+        return;
+      }
+      await loadAlerts();
+      if (result && !("error" in result)) {
+        if (result.alerts.length > 0) {
+          alert(`${result.message}\n\n${result.alerts.length} email${result.alerts.length > 1 ? "s" : ""} sent.`);
+        } else {
+          alert(`${result.message}\n\nNo emails sent - no budgets meet alert criteria or alerts were already sent recently.`);
+        }
       }
     } catch (error) {
       console.error("Error checking alerts:", error);
@@ -98,16 +107,15 @@ export default function BudgetAlertPanel({
     }
   };
 
-  const sendWeeklySummary = async () => {
-    if (!userEmail) {
-      alert("Unable to get your email address. Please ensure you're signed in.");
-      return;
-    }
-
+  const sendWeeklySummaryHandler = async () => {
     try {
       setEmailTesting(true);
-      const result = await budgetApi.sendWeeklySummary(userEmail, userName);
-      alert(`${result.message}\n\nEmail sent to: ${userEmail}`);
+      const result = await sendWeeklySummary();
+      if (result && "error" in result) {
+        alert(result.error);
+        return;
+      }
+      if (result && !("error" in result)) alert(result.message);
     } catch (error) {
       console.error("Error sending weekly summary:", error);
       alert("Failed to send weekly summary. Make sure you have budgets created.");
@@ -135,20 +143,18 @@ export default function BudgetAlertPanel({
   //   }
   // };
 
-  const resendAlertEmail = async (alertId: string) => {
-    if (!userEmail) {
-      alert("Unable to get your email address. Please ensure you're signed in.");
-      return;
-    }
-
+  const resendAlertEmailHandler = async (alertId: string) => {
     try {
       setResendingAlertId(alertId);
-      const result = await budgetApi.resendAlertEmail(alertId, userEmail, userName);
-      alert(`${result.message}\n\nEmail resent to: ${userEmail}`);
-    } catch (error: any) {
+      const result = await resendAlertEmail(alertId);
+      if (result && "error" in result) {
+        alert(result.error);
+        return;
+      }
+      if (result && !("error" in result)) alert(result.message);
+    } catch (error: unknown) {
       console.error("Error resending alert email:", error);
-      const errorMsg = error?.response?.data?.error || "Failed to resend alert email";
-      alert(`Error: ${errorMsg}`);
+      alert("Failed to resend alert email");
     } finally {
       setResendingAlertId(null);
     }
@@ -292,7 +298,7 @@ export default function BudgetAlertPanel({
             Send Test Email
           </button> */}
           <button
-            onClick={sendWeeklySummary}
+            onClick={sendWeeklySummaryHandler}
             disabled={emailTesting || !userEmail}
             className="flex items-center gap-2 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
@@ -348,7 +354,7 @@ export default function BudgetAlertPanel({
 
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => resendAlertEmail(alert.id)}
+                    onClick={() => resendAlertEmailHandler(alert.id)}
                     disabled={resendingAlertId === alert.id || !userEmail}
                     className="p-1 text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Resend email"
@@ -361,7 +367,7 @@ export default function BudgetAlertPanel({
                   </button>
                   {!alert.isRead && (
                     <button
-                      onClick={() => markAlertAsRead(alert.id)}
+                      onClick={() => markAlertAsReadHandler(alert.id)}
                       className="p-1 text-gray-400 hover:text-green-600 dark:hover:text-green-400 rounded transition-colors"
                       title="Mark as read"
                     >

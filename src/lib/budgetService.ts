@@ -1,5 +1,5 @@
 import { prisma } from './prismaClient';
-import { Budget, BudgetProgress, BudgetAlert, BudgetSummary, CreateBudgetRequest } from '@/types';
+import { Budget, BudgetProgress, BudgetAlert, BudgetSummary, CreateBudgetRequest, PlaidTransaction } from '@/types';
 import { filterOutCreditCardPaymentsPartial } from './chartUtils';
 import { addDays, addWeeks, addMonths, addYears, isAfter, isBefore, differenceInDays, differenceInWeeks, differenceInMonths, differenceInYears } from 'date-fns';
 import { EmailService } from './emailService';
@@ -151,18 +151,14 @@ export class BudgetService {
         if (!budget) return null;
 
         const { startDate, endDate } = this.getBudgetPeriodDates(budget);
-        const spent = await this.calculateSpentAmount(budget, startDate, endDate);
 
+        const transactions = await this.calculateSpentAmount(budget, startDate, endDate);
+        const spent = transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
         const remaining = budget.amount - spent;
         const percentage = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
         const daysRemaining = differenceInDays(endDate, new Date());
         const isOverBudget = spent > budget.amount;
-
-        // Calculate projected spend based on current rate
-        const daysPassed = differenceInDays(new Date(), startDate);
-        const totalDays = differenceInDays(endDate, startDate);
-        const spendRate = daysPassed > 0 ? spent / daysPassed : 0;
-        const projectedSpend = spendRate * totalDays;
+        const projectedSpend = transactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
 
         return {
             budget,
@@ -172,6 +168,7 @@ export class BudgetService {
             daysRemaining: Math.max(0, daysRemaining),
             isOverBudget,
             projectedSpend,
+            transactions,
         };
     }
 
@@ -494,7 +491,7 @@ export class BudgetService {
     /**
      * Helper: Calculate spent amount for a budget
      */
-    private static async calculateSpentAmount(budget: Budget, startDate: Date, endDate: Date): Promise<number> {
+    private static async calculateSpentAmount(budget: Budget, startDate: Date, endDate: Date): Promise<PlaidTransaction[]> {
         let where: any = {
             date: { gte: startDate, lte: endDate },
             amount: { gt: 0 }, // Only expenses
@@ -528,7 +525,8 @@ export class BudgetService {
         // Filter out credit card payments
         const filteredTransactions = filterOutCreditCardPaymentsPartial(transactionsWithNumbers);
 
-        return filteredTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        // return filteredTransactions.reduce((sum, t) => sum + Math.abs(t.amount), 0);
+        return filteredTransactions as PlaidTransaction[];
     }
 
     /**

@@ -149,6 +149,7 @@ export interface BudgetProgress {
     daysRemaining: number;
     isOverBudget: boolean;
     projectedSpend: number;
+    transactions: PlaidTransaction[];
 }
 
 export interface BudgetFilters {

@@ -198,7 +198,7 @@ export function getAllCategoriesWithCounts(transactions: PlaidTransaction[]): Ca
 export function calculateCreditCardMetrics(transactions: PlaidTransaction[]) {
     // Filter out credit card payments before calculating metrics
     const filteredTransactions = filterOutCreditCardPayments(transactions)
-    const expenses = filteredTransactions.filter(t => t.amount < 0)
+    const expenses = filteredTransactions.filter(t => t.amount > 0)
     const totalSpending = expenses.reduce((sum, t) => sum + Math.abs(t.amount), 0)
     const averageTransaction = expenses.length > 0 ? totalSpending / expenses.length : 0
     const largestTransaction = expenses.length > 0 ? Math.max(...expenses.map(t => Math.abs(t.amount))) : 0

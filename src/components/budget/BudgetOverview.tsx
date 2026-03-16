@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { BudgetProgress, BudgetSummary } from "@/types";
-import { budgetApi } from "@/lib/api";
+import { getAllBudgetProgress, getBudgetSummary } from "@/app/actions";
 import { useTheme } from "@/hooks/useTheme";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -36,10 +36,13 @@ export default function BudgetOverview({
 
   const loadBudgetData = async () => {
     try {
-      const [progressData, summaryData] = await Promise.all([
-        budgetApi.getAllBudgetProgress(),
-        budgetApi.getBudgetSummary(),
+      const [progressResult, summaryResult] = await Promise.all([
+        getAllBudgetProgress(),
+        getBudgetSummary(),
       ]);
+
+      const progressData = Array.isArray(progressResult) ? progressResult : [];
+      const summaryData = summaryResult && !("error" in summaryResult) ? summaryResult : null;
 
       setBudgetProgress(progressData);
       setBudgetSummary(summaryData);

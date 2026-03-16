@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Environment-based debug endpoint security
- * Only allows access in development or when explicitly enabled
+ * Environment-based debug endpoint security.
+ * Debug routes are disabled in production unless explicitly enabled via env.
  */
 export function isDebugEnabled(): boolean {
-    // Check if we're in development mode
     if (process.env.NODE_ENV === 'development') {
         return true;
     }
-
-    // Check for explicit debug flag (should be used carefully)
-    if (process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
+    if (process.env.DEBUG_API_ENABLED === 'true' || process.env.ENABLE_DEBUG_ENDPOINTS === 'true') {
         return true;
     }
-
     return false;
 }
 

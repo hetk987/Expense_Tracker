@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { BudgetProgress } from "@/types";
 import { useTheme } from "@/hooks/useTheme";
 import { formatCurrency } from "@/lib/utils";
@@ -13,6 +14,8 @@ import {
   Clock,
   Edit,
   Trash2,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 
 interface BudgetProgressCardProps {
@@ -28,6 +31,7 @@ export default function BudgetProgressCard({
   onDelete,
   className = "",
 }: BudgetProgressCardProps) {
+  const [transactionsExpanded, setTransactionsExpanded] = useState(false);
   const isDark = useTheme();
   const {
     budget,
@@ -37,7 +41,13 @@ export default function BudgetProgressCard({
     daysRemaining,
     isOverBudget,
     projectedSpend,
+    transactions,
   } = progress;
+
+  const sortedTransactions = useMemo(
+    () => [...transactions].sort((a, b) => b.amount - a.amount),
+    [transactions]
+  );
 
   // Determine status color and icon
   const getStatusInfo = () => {
@@ -236,7 +246,78 @@ export default function BudgetProgressCard({
           </span>
         </div>
       </div>
+
+      {/* Transactions accordion: section scoped by budget.id, content always in DOM to avoid wrong placement */}
+      <section
+        id={`transactions-section-${budget.id}`}
+        role="region"
+        aria-labelledby={`transactions-trigger-${budget.id}`}
+        className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-600"
+      >
+        <button
+          id={`transactions-trigger-${budget.id}`}
+          type="button"
+          onClick={() => setTransactionsExpanded((prev) => !prev)}
+          aria-expanded={transactionsExpanded}
+          aria-controls={`transactions-list-${budget.id}`}
+          className="flex w-full items-center justify-between text-left text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors"
+        >
+          <span>Transactions ({transactions.length})</span>
+          {transactionsExpanded ? (
+            <ChevronUp className="h-4 w-4 shrink-0" />
+          ) : (
+            <ChevronDown className="h-4 w-4 shrink-0" />
+          )}
+        </button>
+        <div
+          id={`transactions-list-${budget.id}`}
+          role="region"
+          aria-hidden={!transactionsExpanded}
+          className={`mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 overflow-hidden transition-[max-height] duration-200 ${
+            transactionsExpanded ? "max-h-[2000px]" : "max-h-0 mt-0"
+          }`}
+        >
+          {transactions.length === 0 ? (
+            <p className="col-span-full text-sm text-gray-500 dark:text-gray-400 py-2">
+              No transactions in this period.
+            </p>
+          ) : (
+            sortedTransactions.map((transaction) => {
+              const transactionPercent =
+                budget.amount === 0
+                  ? 0
+                  : (transaction.amount / budget.amount) * 100;
+              const barWidth = Math.min(transactionPercent, 100);
+              return (
+                <div
+                  key={transaction.plaidTransactionId}
+                  className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-sm min-w-0"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate min-w-0">
+                      {transaction.name}
+                    </span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400 shrink-0">
+                      {formatCurrency(transaction.amount)}
+                    </span>
+                  </div>
+                  <div className="space-y-1 min-w-0">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-2 rounded-full bg-gray-500 dark:bg-gray-400 transition-all duration-300 min-w-0"
+                        style={{ width: `${barWidth}%` }}
+                      />
+                    </div>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {transactionPercent.toFixed(1)}% of budget
+                    </span>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
     </div>
   );
 }
-
