@@ -36,13 +36,18 @@ import {
     Activity,
     Check,
 } from "lucide-react";
-import { getDashboardData } from "@/app/actions";
+import {
+    getDashboardData,
+    updateTransactionAction,
+    deleteTransactionAction,
+} from "@/app/actions";
 import { plaidApi } from "@/lib/api";
 import {
     PlaidTransaction,
     PlaidAccount,
     TransactionFilters,
     CategoryStats,
+    UpdateTransactionPayload,
 } from "@/types";
 import {
     formatCurrency,
@@ -267,6 +272,14 @@ export default function TransactionsPage() {
         averageAmount: 0,
         largestAmount: 0,
     });
+
+    // Edit modal state
+    const [editingTransaction, setEditingTransaction] =
+        useState<PlaidTransaction | null>(null);
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [isSavingEdit, setIsSavingEdit] = useState(false);
+    const [editError, setEditError] = useState<string | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Debounced search term
     const debouncedSearchTerm = useDebounce(searchTerm, 300);
@@ -565,6 +578,98 @@ export default function TransactionsPage() {
         setFilters(pendingFilters);
     }, [pendingFilters]);
 
+    const handleOpenEditModal = useCallback((transaction: PlaidTransaction) => {
+        setEditingTransaction(transaction);
+        setEditError(null);
+        setIsEditModalOpen(true);
+    }, []);
+
+    const handleCloseEditModal = useCallback(() => {
+        if (isSavingEdit || isDeleting) return;
+        setIsEditModalOpen(false);
+        setEditingTransaction(null);
+        setEditError(null);
+    }, [isSavingEdit, isDeleting]);
+
+    const handleSaveTransaction = useCallback(
+        async (updates: Partial<UpdateTransactionPayload>) => {
+            if (!editingTransaction) return;
+            try {
+                setIsSavingEdit(true);
+                setEditError(null);
+
+                const payload: UpdateTransactionPayload = {
+                    id: editingTransaction.id,
+                    ...updates,
+                };
+
+                const result = await updateTransactionAction(payload);
+                if ("error" in result) {
+                    setEditError(result.error);
+                    return;
+                }
+
+                const updated = result as PlaidTransaction;
+
+                setTransactions((prev) =>
+                    prev.map((t) => (t.id === updated.id ? updated : t)),
+                );
+
+                setAllTransactions((prev) =>
+                    prev.length > 0
+                        ? prev.map((t) => (t.id === updated.id ? updated : t))
+                        : prev,
+                );
+
+                handleCloseEditModal();
+            } catch (error) {
+                console.error("Error saving transaction:", error);
+                setEditError(
+                    error instanceof Error
+                        ? error.message
+                        : "Failed to save transaction",
+                );
+            } finally {
+                setIsSavingEdit(false);
+            }
+        },
+        [editingTransaction, handleCloseEditModal],
+    );
+
+    const handleDeleteTransaction = useCallback(async () => {
+        if (!editingTransaction) return;
+        try {
+            setIsDeleting(true);
+            setEditError(null);
+
+            const result = await deleteTransactionAction(editingTransaction.id);
+            if ("error" in result) {
+                setEditError(result.error);
+                return;
+            }
+
+            setTransactions((prev) =>
+                prev.filter((t) => t.id !== editingTransaction.id),
+            );
+            setAllTransactions((prev) =>
+                prev.length > 0
+                    ? prev.filter((t) => t.id !== editingTransaction.id)
+                    : prev,
+            );
+
+            handleCloseEditModal();
+        } catch (error) {
+            console.error("Error deleting transaction:", error);
+            setEditError(
+                error instanceof Error
+                    ? error.message
+                    : "Failed to delete transaction",
+            );
+        } finally {
+            setIsDeleting(false);
+        }
+    }, [editingTransaction, handleCloseEditModal]);
+
     if (loading) {
         return (
             <AuthWrapper>
@@ -579,18 +684,6 @@ export default function TransactionsPage() {
                 </div>
             </AuthWrapper>
         );
-    }
-
-    function handleChangeTransactionStatus(id: string): void {
-        plaidApi.updateTransactionStatus(id).then((transaction) => {
-            setTransactions((prev) =>
-                prev.map((transaction) =>
-                    transaction.id === id
-                        ? { ...transaction, pending: !transaction.pending }
-                        : transaction,
-                ),
-            );
-        });
     }
 
     return (
@@ -1067,10 +1160,15 @@ export default function TransactionsPage() {
                                                 (transaction, index) => (
                                                     <div
                                                         key={transaction.id}
-                                                        className="group relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-apple-lg transition-all duration-200 hover:border-primary-200 animate-slide-up"
+                                                        className="group relative bg-white dark:bg-gray-800 rounded-2xl border border-gray-200 dark:border-gray-700 p-6 hover:shadow-apple-lg transition-all duration-200 hover:border-primary-200 animate-slide-up cursor-pointer"
                                                         style={{
                                                             animationDelay: `${index * 0.05}s`,
                                                         }}
+                                                        onClick={() =>
+                                                            handleOpenEditModal(
+                                                                transaction,
+                                                            )
+                                                        }
                                                     >
                                                         <div className="flex items-stretch justify-between">
                                                             <div className="flex gap-4 flex-row">
@@ -1137,7 +1235,7 @@ export default function TransactionsPage() {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="text-right flex flex-col justify-between">
+                                                            <div className="text-right flex flex-col justify-center">
                                                                 <div
                                                                     className={`text-xl font-bold ${
                                                                         transaction.amount >
@@ -1156,21 +1254,6 @@ export default function TransactionsPage() {
                                                                         ),
                                                                     )}
                                                                 </div>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    onClick={() =>
-                                                                        handleChangeTransactionStatus(
-                                                                            transaction.id,
-                                                                        )
-                                                                    }
-                                                                >
-                                                                    <Check className="h-4 w-4" />
-                                                                    Mark as{" "}
-                                                                    {transaction.pending
-                                                                        ? "Completed"
-                                                                        : "Pending"}
-                                                                </Button>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1401,6 +1484,305 @@ export default function TransactionsPage() {
                             </ChartErrorBoundary>
                         </TabsContent>
                     </Tabs>
+
+                    {editingTransaction && isEditModalOpen && (
+                        <div className="fixed inset-0 z-40 flex items-center justify-center">
+                            <div
+                                className="fixed inset-0 bg-black/40"
+                                onClick={handleCloseEditModal}
+                            />
+                            <div className="relative z-50 w-full max-w-lg mx-4 rounded-2xl bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 shadow-2xl border border-gray-100 dark:border-gray-800">
+                                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/80 rounded-t-2xl">
+                                    <div>
+                                        <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                            Edit transaction
+                                        </h3>
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                            Adjust details locally. Changes do not affect your bank
+                                            or Plaid.
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={handleCloseEditModal}
+                                        className="text-gray-400 hover:text-gray-700 dark:text-gray-500 dark:hover:text-gray-200"
+                                        disabled={isSavingEdit || isDeleting}
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </button>
+                                </div>
+
+                                <div className="px-6 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+                                    <div className="text-xs text-gray-600 dark:text-gray-300">
+                                        <div className="font-medium text-gray-800 dark:text-gray-200">
+                                            {editingTransaction.account?.name}
+                                            {editingTransaction.account?.mask
+                                                ? ` ••••${editingTransaction.account.mask}`
+                                                : ""}
+                                        </div>
+                                        <div className="mt-1">
+                                            Transaction ID:{" "}
+                                            <span className="font-mono text-[11px] break-all">
+                                                {editingTransaction.id}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                Name
+                                            </label>
+                                            <Input
+                                                defaultValue={editingTransaction.name}
+                                                onChange={(e) =>
+                                                    setEditingTransaction(
+                                                        (prev) =>
+                                                            prev && {
+                                                                ...prev,
+                                                                name: e.target.value,
+                                                            },
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                Merchant
+                                            </label>
+                                            <Input
+                                                defaultValue={
+                                                    editingTransaction.merchantName || ""
+                                                }
+                                                onChange={(e) =>
+                                                    setEditingTransaction(
+                                                        (prev) =>
+                                                            prev && {
+                                                                ...prev,
+                                                                merchantName: e.target.value,
+                                                            },
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                Amount
+                                            </label>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                defaultValue={Math.abs(
+                                                    editingTransaction.amount,
+                                                ).toString()}
+                                                onChange={(e) => {
+                                                    const value = parseFloat(
+                                                        e.target.value,
+                                                    );
+                                                    if (Number.isNaN(value)) return;
+                                                    const sign =
+                                                        editingTransaction.amount >= 0
+                                                            ? 1
+                                                            : -1;
+                                                    setEditingTransaction(
+                                                        (prev) =>
+                                                            prev && {
+                                                                ...prev,
+                                                                amount: sign * value,
+                                                            },
+                                                    );
+                                                }}
+                                            />
+                                            <p className="text-[11px] text-gray-500 dark:text-gray-500">
+                                                Positive amounts are treated as spending.
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                Date
+                                            </label>
+                                            <Input
+                                                type="date"
+                                                defaultValue={
+                                                    editingTransaction.date.split(
+                                                        "T",
+                                                    )[0]
+                                                }
+                                                onChange={(e) =>
+                                                    setEditingTransaction(
+                                                        (prev) =>
+                                                            prev && {
+                                                                ...prev,
+                                                                date: e.target.value,
+                                                            },
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                Status
+                                            </label>
+                                            <Select
+                                                defaultValue={
+                                                    editingTransaction.pending
+                                                        ? "pending"
+                                                        : "completed"
+                                                }
+                                                onValueChange={(value) =>
+                                                    setEditingTransaction(
+                                                        (prev) =>
+                                                            prev && {
+                                                                ...prev,
+                                                                pending: value === "pending",
+                                                            },
+                                                    )
+                                                }
+                                            >
+                                                <SelectTrigger className="h-9">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="completed">
+                                                        Completed
+                                                    </SelectItem>
+                                                    <SelectItem value="pending">
+                                                        Pending
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                            Category
+                                        </label>
+                                        <Select
+                                            defaultValue={editingTransaction.category}
+                                            onValueChange={(value) =>
+                                                setEditingTransaction(
+                                                    (prev) =>
+                                                        prev && {
+                                                            ...prev,
+                                                            category: value,
+                                                        },
+                                                )
+                                            }
+                                        >
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {categoryOptions.map((category) => (
+                                                    <SelectItem
+                                                        key={category}
+                                                        value={category}
+                                                    >
+                                                        {category}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                Payment channel
+                                            </label>
+                                            <Input
+                                                defaultValue={
+                                                    editingTransaction.paymentChannel ||
+                                                    ""
+                                                }
+                                                onChange={(e) =>
+                                                    setEditingTransaction(
+                                                        (prev) =>
+                                                            prev && {
+                                                                ...prev,
+                                                                paymentChannel:
+                                                                    e.target.value || undefined,
+                                                            },
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-gray-700 dark:text-gray-200">
+                                                Transaction type
+                                            </label>
+                                            <Input
+                                                defaultValue={
+                                                    editingTransaction.transactionType ||
+                                                    ""
+                                                }
+                                                onChange={(e) =>
+                                                    setEditingTransaction(
+                                                        (prev) =>
+                                                            prev && {
+                                                                ...prev,
+                                                                transactionType:
+                                                                    e.target.value || undefined,
+                                                            },
+                                                    )
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {editError && (
+                                        <p className="text-xs text-red-600 dark:text-red-400">
+                                            {editError}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900 rounded-b-2xl">
+                                    <Button
+                                        variant="destructive"
+                                        size="sm"
+                                        onClick={handleDeleteTransaction}
+                                        disabled={isSavingEdit || isDeleting}
+                                    >
+                                        {isDeleting ? "Deleting..." : "Delete"}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleCloseEditModal}
+                                        disabled={isSavingEdit || isDeleting}
+                                    >
+                                        Cancel
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        onClick={() =>
+                                            handleSaveTransaction({
+                                                amount: editingTransaction.amount,
+                                                name: editingTransaction.name,
+                                                merchantName:
+                                                    editingTransaction.merchantName,
+                                                category: editingTransaction.category,
+                                                date: editingTransaction.date,
+                                                pending: editingTransaction.pending,
+                                                paymentChannel:
+                                                    editingTransaction.paymentChannel,
+                                                transactionType:
+                                                    editingTransaction.transactionType,
+                                            })
+                                        }
+                                        disabled={isSavingEdit || isDeleting}
+                                        className="min-w-[110px]"
+                                    >
+                                        {isSavingEdit ? "Saving..." : "Save changes"}
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </AuthWrapper>

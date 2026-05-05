@@ -32,6 +32,20 @@ export interface PlaidTransaction {
     account?: PlaidAccount;
 }
 
+// Payload used for updating an existing transaction from the UI.
+// Uses primitive types compatible with the PlaidTransaction interface.
+export interface UpdateTransactionPayload {
+    id: string;
+    amount?: number;
+    name?: string;
+    merchantName?: string;
+    category?: string;
+    date?: string;
+    pending?: boolean;
+    paymentChannel?: string;
+    transactionType?: string;
+}
+
 export interface LinkTokenResponse {
     link_token: string;
 }

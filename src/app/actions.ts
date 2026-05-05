@@ -15,6 +15,7 @@ import type {
     PlaidAccount,
     CategoryStats,
     PlaidTransaction,
+    UpdateTransactionPayload,
 } from '@/types';
 
 function requireUserId(): Promise<string> {
@@ -104,6 +105,67 @@ export async function getDashboardData(filters: TransactionFilters = {}): Promis
     } catch (e) {
         console.error('getDashboardData error:', e);
         return { error: e instanceof Error ? e.message : 'Failed to load dashboard data' };
+    }
+}
+
+export async function updateTransactionAction(
+    payload: UpdateTransactionPayload
+): Promise<PlaidTransaction | { error: string }> {
+    try {
+        await requireUserId();
+
+        const { id, ...updates } = payload;
+        const updatedPrisma = await PlaidService.updateTransaction(id, updates);
+        if (!updatedPrisma) {
+            throw new Error('Transaction not found');
+        }
+
+        const [converted] = convertPrismaTransactions([updatedPrisma as any]) as PlaidTransaction[];
+
+        return {
+            ...converted,
+            date:
+                typeof converted.date === 'string'
+                    ? converted.date
+                    : (converted.date as unknown as Date).toISOString(),
+            createdAt:
+                typeof converted.createdAt === 'string'
+                    ? converted.createdAt
+                    : (converted.createdAt as unknown as Date).toISOString(),
+            updatedAt:
+                typeof converted.updatedAt === 'string'
+                    ? converted.updatedAt
+                    : (converted.updatedAt as unknown as Date).toISOString(),
+            account: converted.account
+                ? {
+                      ...converted.account,
+                      createdAt:
+                          typeof converted.account.createdAt === 'string'
+                              ? converted.account.createdAt
+                              : (converted.account.createdAt as unknown as Date).toISOString(),
+                      updatedAt:
+                          typeof converted.account.updatedAt === 'string'
+                              ? converted.account.updatedAt
+                              : (converted.account.updatedAt as unknown as Date).toISOString(),
+                  }
+                : undefined,
+        };
+    } catch (e) {
+        console.error('updateTransactionAction error:', e);
+        return { error: e instanceof Error ? e.message : 'Failed to update transaction' };
+    }
+}
+
+export async function deleteTransactionAction(
+    id: string
+): Promise<{ success: boolean } | { error: string }> {
+    try {
+        await requireUserId();
+        await PlaidService.deleteTransaction(id);
+        return { success: true };
+    } catch (e) {
+        console.error('deleteTransactionAction error:', e);
+        return { error: e instanceof Error ? e.message : 'Failed to delete transaction' };
     }
 }
 

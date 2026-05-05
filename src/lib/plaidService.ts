@@ -3,7 +3,7 @@ import { prisma } from './prismaClient';
 import { getCurrentYearRange, createLocalDate, toDateString } from './utils';
 import { TRANSACTION_LIMITS, PAGINATION } from './constants';
 import { filterOutCreditCardPaymentsPartial } from './chartUtils';
-import type { TransactionFilters } from '@/types';
+import type { TransactionFilters, UpdateTransactionPayload } from '@/types';
 
 const configuration = new Configuration({
     basePath: PlaidEnvironments[process.env.PLAID_ENV as keyof typeof PlaidEnvironments || 'sandbox'],
@@ -34,6 +34,98 @@ export class PlaidService {
             return transaction;
         } catch (error) {
             console.error('Error changing transaction status:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Updates a single transaction with the provided fields.
+     * This operates only on our local database copy and does not call Plaid.
+     */
+    static async updateTransaction(
+        id: string,
+        updates: Partial<UpdateTransactionPayload>
+    ) {
+        try {
+            const existing = await prisma.plaidTransaction.findUnique({
+                where: { id },
+            });
+
+            if (!existing) {
+                throw new Error('Transaction not found');
+            }
+
+            const {
+                amount,
+                name,
+                merchantName,
+                category,
+                date,
+                pending,
+                paymentChannel,
+                transactionType,
+            } = updates;
+
+            const data: any = {};
+
+            if (typeof amount === 'number') {
+                data.amount = amount;
+            }
+            if (typeof name === 'string') {
+                data.name = name;
+            }
+            if (typeof merchantName === 'string') {
+                data.merchantName = merchantName;
+            }
+            if (typeof category === 'string') {
+                data.category = category;
+            }
+            if (typeof date === 'string') {
+                // Store as Date; caller should pass an ISO-like string (YYYY-MM-DD or full ISO).
+                data.date = new Date(date);
+            }
+            if (typeof pending === 'boolean') {
+                data.pending = pending;
+            }
+            if (typeof paymentChannel === 'string') {
+                data.paymentChannel = paymentChannel;
+            }
+            if (typeof transactionType === 'string') {
+                data.transactionType = transactionType;
+            }
+
+            if (Object.keys(data).length === 0) {
+                // Nothing to update; just return the existing record including its account
+                return await prisma.plaidTransaction.findUnique({
+                    where: { id },
+                    include: { account: true },
+                });
+            }
+
+            const updated = await prisma.plaidTransaction.update({
+                where: { id },
+                data,
+                include: { account: true },
+            });
+
+            return updated;
+        } catch (error) {
+            console.error('Error updating transaction:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Deletes a single transaction from our local database.
+     */
+    static async deleteTransaction(id: string) {
+        try {
+            await prisma.plaidTransaction.delete({
+                where: { id },
+            });
+            return { success: true };
+        } catch (error) {
+            console.error('Error deleting transaction:', error);
             throw error;
         }
     }
